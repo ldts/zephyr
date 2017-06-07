@@ -7,7 +7,7 @@
 #include <zephyr.h>
 
 #include <misc/printk.h>
-
+#include <logging/sys_log.h>
 #include <device.h>
 #include <i2c.h>
 
@@ -41,6 +41,8 @@ void main(void)
 	u8_t set_config;
 	int i, j, m;
 	int cnt;
+
+	printk("-Grove LCD demo code\n%s %s\n", __DATE__, __TIME__);
 
 	glcd = device_get_binding(GROVE_LCD_NAME);
 	if (!glcd) {
