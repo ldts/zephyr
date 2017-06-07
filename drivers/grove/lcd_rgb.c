@@ -301,20 +301,21 @@ int glcd_initialize(struct device *port)
 	_sleep(50);
 
 	/* Configure everything for the display function first */
+	SYS_LOG_DBG("configure LCD");
 	cmd = GLCD_CMD_FUNCTION_SET | GLCD_FS_ROWS_2;
 	glcd_function_set(port, cmd);
 
 	/* turn the display on - by default no cursor and no blinking */
+	SYS_LOG_DBG("turn the display on ");
 	cmd = GLCD_DS_DISPLAY_ON | GLCD_DS_CURSOR_OFF | GLCD_DS_BLINK_OFF;
-
 	glcd_display_state_set(port, cmd);
 
 	/* Clear the screen */
+	SYS_LOG_DBG("clear the screen");
 	glcd_clear(port);
 
 	/* Initialize to the default text direction for romance languages */
 	cmd = GLCD_IS_ENTRY_LEFT | GLCD_IS_SHIFT_DECREMENT;
-
 	glcd_input_state_set(port, cmd);
 
 	/* Now power on the background RGB control */
