@@ -47,6 +47,17 @@ static const stm32_pin_func_t pin_pa0_funcs[] = {
 			STM32F4X_PIN_CONFIG_AF_PUSH_UP,
 };
 
+static const stm32_pin_func_t pin_pb8_funcs[] = {
+	[STM32F4_PINMUX_FUNC_PB8_I2C1_SCL - 1] =
+			STM32F4X_PIN_CONFIG_AF_OPEN_UP,
+
+};
+
+static const stm32_pin_func_t pin_pb9_funcs[] = {
+	[STM32F4_PINMUX_FUNC_PB9_I2C1_SDA - 1] =
+			STM32F4X_PIN_CONFIG_AF_OPEN_UP,
+};
+
 /**
  * @brief pin configuration
  */
@@ -58,6 +69,8 @@ static const struct stm32_pinmux_conf pins[] = {
 	STM32_PIN_CONF(STM32_PIN_PA2, pin_pa2_funcs),
 	STM32_PIN_CONF(STM32_PIN_PA3, pin_pa3_funcs),
 	STM32_PIN_CONF(STM32_PIN_PA0, pin_pa0_funcs),
+	STM32_PIN_CONF(STM32_PIN_PB8, pin_pb8_funcs),
+	STM32_PIN_CONF(STM32_PIN_PB9, pin_pb9_funcs),
 };
 
 int stm32_get_pin_config(int pin, int func)
