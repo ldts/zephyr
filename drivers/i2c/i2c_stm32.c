@@ -36,18 +36,25 @@ static int i2c_stm32_runtime_configure(struct device *dev, u32_t config)
 	struct i2c_stm32_data *data = DEV_DATA(dev);
 	I2C_HandleTypeDef *I2CHandle = &data->hi2c;
 
+	SYS_LOG_DBG("i2c configured called");
+
 	data->dev_config.raw = config;
 
-	if (data->dev_config.bits.is_slave_read)
+	if (data->dev_config.bits.is_slave_read) {
+		SYS_LOG_ERR("is slave set");
 		return -EINVAL;
+	}
 
 	switch (data->dev_config.bits.speed) {
 	case I2C_SPEED_STANDARD:
 		I2CHandle->Init.ClockSpeed = 100000;
+		break;
 	case I2C_SPEED_FAST:
 		I2CHandle->Init.ClockSpeed = 400000;
 		I2CHandle->Init.DutyCycle = I2C_DUTYCYCLE_2;
+		break;
 	default:
+		SYS_LOG_ERR("invalid speed");
 		return -EINVAL;
 	}
 
@@ -64,7 +71,18 @@ static int i2c_stm32_runtime_configure(struct device *dev, u32_t config)
 
 	HAL_I2C_DeInit(I2CHandle);
 
-	return HAL_I2C_Init(I2CHandle) == HAL_OK ? 0 : -EINVAL;
+	if (HAL_I2C_Init(I2CHandle) != HAL_OK) {
+		SYS_LOG_ERR("I2C initialization error");
+		return -EIO;
+	}
+
+	while (HAL_I2C_GetState(I2CHandle) != HAL_I2C_STATE_READY) {
+		;
+	}
+
+	SYS_LOG_DBG("i2c configured");
+
+	return 0;
 }
 
 #ifdef CONFIG_I2C_STM32_INTERRUPT
@@ -146,6 +164,18 @@ static int i2c_stm32_transfer(struct device *dev,
 	u8_t msg_left = num_msgs;
 	int ret = 0;
 
+	SYS_LOG_DBG("request transfer: checking master ready");
+	while (HAL_I2C_GetState(I2CHandle) != HAL_I2C_STATE_READY) {
+		;
+	}
+
+	SYS_LOG_DBG("request transfer: checking slave 0x%x", slave_address);
+	while (HAL_I2C_IsDeviceReady(I2CHandle, slave_address, 10, 300) == HAL_TIMEOUT) {
+		;
+	}
+
+
+	SYS_LOG_DBG("start transfer");
 	/* Process all messages one-by-one */
 	while (msg_left > 0) {
 		if ((cur_msg->flags & I2C_MSG_RW_MASK) == I2C_MSG_WRITE) {
@@ -174,21 +204,22 @@ static int i2c_stm32_transfer(struct device *dev,
 #endif
 		}
 
+		if (ret < 0) {
+			ret = -EIO;
+			break;
+		}
+
 #ifdef CONFIG_I2C_STM32_INTERRUPT
+
+		if (data->is_err) {
+			ret = -EIO;
+			break;
+		}
 		__HAL_I2C_ENABLE(I2CHandle);
 
 		k_sem_take(&data->device_sync_sem, K_FOREVER);
 
 		__HAL_I2C_DISABLE(I2CHandle);
-
-		if (ret < 0 || data->is_err) {
-			ret = -EIO;
-			break;
-		}
-#else
-		if (ret < 0) {
-			break;
-		}
 #endif
 
 		cur_msg++;
@@ -219,6 +250,7 @@ static int i2c_stm32_init(struct device *dev)
 	struct i2c_stm32_data *data = DEV_DATA(dev);
 	const struct i2c_stm32_config *cfg = DEV_CFG(dev);
 	I2C_HandleTypeDef *I2CHandle = &data->hi2c;
+	int ret;
 
 	k_sem_init(&data->device_sync_sem, 0, UINT_MAX);
 
@@ -231,7 +263,10 @@ static int i2c_stm32_init(struct device *dev)
 	I2CHandle->Instance = I2C_STRUCT(dev);
 
 	/* Try to Setup HW */
-	i2c_stm32_runtime_configure(dev, data->dev_config.raw);
+	ret = i2c_stm32_runtime_configure(dev, data->dev_config.raw);
+	if (ret) {
+		return ret;
+	}
 
 #ifdef CONFIG_I2C_STM32_INTERRUPT
 	cfg->irq_config_func(dev);
@@ -248,8 +283,10 @@ static void i2c_stm32_irq_config_func_1(struct device *port);
 
 static const struct i2c_stm32_config i2c_stm32_cfg_1 = {
 	.base = (u8_t *)I2C1_BASE,
-	.pclken = { .bus = STM32_CLOCK_BUS_APB1,
-		    .enr = LL_APB1_GRP1_PERIPH_I2C1 },
+	.pclken = {
+		.bus = STM32_CLOCK_BUS_APB1,
+		.enr = LL_APB1_GRP1_PERIPH_I2C1
+	},
 #ifdef CONFIG_I2C_STM32_INTERRUPT
 	.irq_config_func = i2c_stm32_irq_config_func_1,
 #endif
@@ -267,18 +304,13 @@ DEVICE_AND_API_INIT(i2c_stm32_1, CONFIG_I2C_1_NAME, &i2c_stm32_init,
 #ifdef CONFIG_I2C_STM32_INTERRUPT
 static void i2c_stm32_irq_config_func_1(struct device *dev)
 {
-#ifdef CONFIG_SOC_SERIES_STM32F4X
-#define PORT_1_EV_IRQ STM32F4_IRQ_I2C1_EV
-#define PORT_1_ER_IRQ STM32F4_IRQ_I2C1_ER
-#endif
-
-	IRQ_CONNECT(PORT_1_EV_IRQ, CONFIG_I2C_1_IRQ_PRI,
+	IRQ_CONNECT(I2C1_EV_IRQn, CONFIG_I2C_1_IRQ_PRI,
 		i2c_stm32_ev_isr, DEVICE_GET(i2c_stm32_1), 0);
-	irq_enable(PORT_1_EV_IRQ);
+	irq_enable(I2C1_EV_IRQn);
 
-	IRQ_CONNECT(PORT_1_ER_IRQ, CONFIG_I2C_1_IRQ_PRI,
+	IRQ_CONNECT(I2C1_ER_IRQn, CONFIG_I2C_1_IRQ_PRI,
 		i2c_stm32_er_isr, DEVICE_GET(i2c_stm32_1), 0);
-	irq_enable(PORT_1_ER_IRQ);
+	irq_enable(I2C1_ER_IRQn);
 }
 #endif
 
@@ -292,8 +324,10 @@ static void i2c_stm32_irq_config_func_2(struct device *port);
 
 static const struct i2c_stm32_config i2c_stm32_cfg_2 = {
 	.base = (u8_t *)I2C2_BASE,
-	.pclken = { .bus = STM32_CLOCK_BUS_APB1,
-		    .enr = LL_APB1_GRP1_PERIPH_I2C2 },
+	.pclken = {
+		.bus = STM32_CLOCK_BUS_APB1,
+		.enr = LL_APB1_GRP1_PERIPH_I2C2
+	},
 #ifdef CONFIG_I2C_STM32_INTERRUPT
 	.irq_config_func = i2c_stm32_irq_config_func_2,
 #endif
@@ -311,18 +345,13 @@ DEVICE_AND_API_INIT(i2c_stm32_2, CONFIG_I2C_2_NAME, &i2c_stm32_init,
 #ifdef CONFIG_I2C_STM32_INTERRUPT
 static void i2c_stm32_irq_config_func_2(struct device *dev)
 {
-#ifdef CONFIG_SOC_SERIES_STM32F4X
-#define PORT_2_EV_IRQ STM32F4_IRQ_I2C2_EV
-#define PORT_2_ER_IRQ STM32F4_IRQ_I2C2_ER
-#endif
-
-	IRQ_CONNECT(PORT_2_EV_IRQ, CONFIG_I2C_2_IRQ_PRI,
+	IRQ_CONNECT(I2C2_EV_IRQn, CONFIG_I2C_2_IRQ_PRI,
 		i2c_stm32_ev_isr, DEVICE_GET(i2c_stm32_2), 0);
-	irq_enable(PORT_2_EV_IRQ);
+	irq_enable(I2C2_EV_IRQn);
 
-	IRQ_CONNECT(PORT_2_ER_IRQ, CONFIG_I2C_2_IRQ_PRI,
+	IRQ_CONNECT(I2C2_ER_IRQn, CONFIG_I2C_2_IRQ_PRI,
 		i2c_stm32_er_isr, DEVICE_GET(i2c_stm32_2), 0);
-	irq_enable(PORT_2_ER_IRQ);
+	irq_enable(I2C2_ER_IRQn);
 }
 #endif
 
