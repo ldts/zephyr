@@ -473,18 +473,13 @@ DEVICE_AND_API_INIT(i2c_stm32f4_1, CONFIG_I2C_1_NAME, &i2c_stm32f4_init,
 #ifdef CONFIG_I2C_STM32F4_INTERRUPT
 static void i2c_stm32f4_irq_config_func_1(struct device *dev)
 {
-#ifdef CONFIG_SOC_SERIES_STM32F4X
-#define PORT_1_EV_IRQ STM32F4_IRQ_I2C1_EV
-#define PORT_1_ER_IRQ STM32F4_IRQ_I2C1_ER
-#endif
-
-	IRQ_CONNECT(PORT_1_EV_IRQ, CONFIG_I2C_1_IRQ_PRI,
+	IRQ_CONNECT(I2C1_EV_IRQn, CONFIG_I2C_1_IRQ_PRI,
 		i2c_stm32f4_ev_isr, DEVICE_GET(i2c_stm32f4_1), 0);
-	irq_enable(PORT_1_EV_IRQ);
+	irq_enable(I2C1_EV_IRQn);
 
-	IRQ_CONNECT(PORT_1_ER_IRQ, CONFIG_I2C_1_IRQ_PRI,
+	IRQ_CONNECT(I2C1_ER_IRQn, CONFIG_I2C_1_IRQ_PRI,
 		i2c_stm32f4_er_isr, DEVICE_GET(i2c_stm32f4_1), 0);
-	irq_enable(PORT_1_ER_IRQ);
+	irq_enable(I2C1_ER_IRQn);
 }
 #endif
 
@@ -517,18 +512,13 @@ DEVICE_AND_API_INIT(i2c_stm32f4_2, CONFIG_I2C_2_NAME, &i2c_stm32f4_init,
 #ifdef CONFIG_I2C_STM32F4_INTERRUPT
 static void i2c_stm32f4_irq_config_func_2(struct device *dev)
 {
-#ifdef CONFIG_SOC_SERIES_STM32F4X
-#define PORT_2_EV_IRQ STM32F4_IRQ_I2C2_EV
-#define PORT_2_ER_IRQ STM32F4_IRQ_I2C2_ER
-#endif
-
-	IRQ_CONNECT(PORT_2_EV_IRQ, CONFIG_I2C_2_IRQ_PRI,
+	IRQ_CONNECT(I2C2_EV_IRQn, CONFIG_I2C_2_IRQ_PRI,
 		i2c_stm32f4_ev_isr, DEVICE_GET(i2c_stm32f4_2), 0);
-	irq_enable(PORT_2_EV_IRQ);
+	irq_enable(I2C2_EV_IRQn);
 
-	IRQ_CONNECT(PORT_2_ER_IRQ, CONFIG_I2C_2_IRQ_PRI,
+	IRQ_CONNECT(I2C2_ER_IRQn, CONFIG_I2C_2_IRQ_PRI,
 		i2c_stm32f4_er_isr, DEVICE_GET(i2c_stm32f4_2), 0);
-	irq_enable(PORT_2_ER_IRQ);
+	irq_enable(I2C2_ER_IRQn);
 }
 #endif
 
@@ -561,18 +551,13 @@ DEVICE_AND_API_INIT(i2c_stm32f4_3, CONFIG_I2C_3_NAME, &i2c_stm32f4_init,
 #ifdef CONFIG_I2C_STM32F4_INTERRUPT
 static void i2c_stm32f4_irq_config_func_3(struct device *dev)
 {
-#ifdef CONFIG_SOC_SERIES_STM32F4X
-#define PORT_3_EV_IRQ STM32F4_IRQ_I2C3_EV
-#define PORT_3_ER_IRQ STM32F4_IRQ_I2C3_ER
-#endif
-
-	IRQ_CONNECT(PORT_3_EV_IRQ, CONFIG_I2C_3_IRQ_PRI,
+	IRQ_CONNECT(I2C3_EV_IRQn, CONFIG_I2C_3_IRQ_PRI,
 		i2c_stm32f4_ev_isr, DEVICE_GET(i2c_stm32f4_3), 0);
-	irq_enable(PORT_3_EV_IRQ);
+	irq_enable(I2C3_EV_IRQn);
 
-	IRQ_CONNECT(PORT_3_ER_IRQ, CONFIG_I2C_3_IRQ_PRI,
+	IRQ_CONNECT(I2C3_ER_IRQn, CONFIG_I2C_3_IRQ_PRI,
 		i2c_stm32f4_er_isr, DEVICE_GET(i2c_stm32f4_3), 0);
-	irq_enable(PORT_3_ER_IRQ);
+	irq_enable(I2C33_ER_IRQn);
 }
 #endif
 
