@@ -36,8 +36,6 @@ static int i2c_stm32_runtime_configure(struct device *dev, u32_t config)
 	struct i2c_stm32_data *data = DEV_DATA(dev);
 	I2C_HandleTypeDef *I2CHandle = &data->hi2c;
 
-	SYS_LOG_DBG("i2c configured called");
-
 	data->dev_config.raw = config;
 
 	if (data->dev_config.bits.is_slave_read) {
@@ -79,8 +77,6 @@ static int i2c_stm32_runtime_configure(struct device *dev, u32_t config)
 	while (HAL_I2C_GetState(I2CHandle) != HAL_I2C_STATE_READY) {
 		;
 	}
-
-	SYS_LOG_DBG("i2c configured");
 
 	return 0;
 }
@@ -164,18 +160,14 @@ static int i2c_stm32_transfer(struct device *dev,
 	u8_t msg_left = num_msgs;
 	int ret = 0;
 
-	SYS_LOG_DBG("request transfer: checking master ready");
 	while (HAL_I2C_GetState(I2CHandle) != HAL_I2C_STATE_READY) {
 		;
 	}
 
-	SYS_LOG_DBG("request transfer: checking slave 0x%x", slave_address);
 	while (HAL_I2C_IsDeviceReady(I2CHandle, slave_address, 10, 300) == HAL_TIMEOUT) {
 		;
 	}
 
-
-	SYS_LOG_DBG("start transfer");
 	/* Process all messages one-by-one */
 	while (msg_left > 0) {
 		if ((cur_msg->flags & I2C_MSG_RW_MASK) == I2C_MSG_WRITE) {
