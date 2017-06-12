@@ -601,7 +601,7 @@ static void i2c_stm32f4_irq_config_func_3(struct device *dev)
 
 	IRQ_CONNECT(I2C3_ER_IRQn, CONFIG_I2C_3_IRQ_PRI,
 		i2c_stm32f4_er_isr, DEVICE_GET(i2c_stm32f4_3), 0);
-	irq_enable(I2C33_ER_IRQn);
+	irq_enable(I2C3_ER_IRQn);
 }
 #endif
 
