@@ -403,7 +403,7 @@ static s32_t i2c_stm32f4_transfer(struct device *dev,
 	LL_I2C_DisableIT_ERR(i2c);
 #endif
 	/* Disable Peripheral */
-	LL_I2C_Enable(i2c);
+	LL_I2C_Disable(i2c);
 
 	return ret;
 }
