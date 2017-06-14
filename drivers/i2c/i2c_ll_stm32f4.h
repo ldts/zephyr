@@ -9,7 +9,6 @@
 
 typedef void (*irq_config_func_t)(struct device *port);
 
-/* device config */
 struct i2c_stm32f4_config {
 	struct stm32_pclken pclken;
 	I2C_TypeDef *i2c;
@@ -18,26 +17,23 @@ struct i2c_stm32f4_config {
 #endif
 };
 
-/* driver data */
+
 struct i2c_stm32f4_data {
-	/* clock device */
-	struct device *clock;
-	/* Device config */
 	union dev_config dev_config;
-	/* ISR Sync */
+#ifdef CONFIG_I2C_STM32F4_INTERRUPT
 	struct k_sem sync;
-	/* Current message data */
+#endif
 	struct {
 		struct i2c_msg *msg;
 		u32_t len;
 		u8_t *buf;
-		u32_t is_err;
-		u32_t is_nack;
-		u32_t is_write;
 		u32_t is_restart;
+		u32_t is_write;
+		u32_t is_nack;
+		u32_t is_err;
 		u32_t flags;
 	} current;
-	/* Slave address */
+
 	u16_t slave_address;
 };
 
