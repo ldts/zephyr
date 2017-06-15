@@ -158,7 +158,7 @@ s32_t msg_write(struct device *dev, struct i2c_msg *msg,
 	LL_I2C_EnableIT_EVT(i2c);
 	LL_I2C_EnableIT_ERR(i2c);
 
-	LL_I2C_AcknowledgeNextData(I2C1, LL_I2C_ACK);
+	LL_I2C_AcknowledgeNextData(i2c, LL_I2C_ACK);
 	LL_I2C_GenerateStartCondition(i2c);
 
 	LL_I2C_EnableIT_TX(i2c);
@@ -342,7 +342,7 @@ s32_t msg_read(struct device *dev, struct i2c_msg *msg,
 		*buf = LL_I2C_ReceiveData8(i2c);
 		NEXT(buf, len);
 		if (len == 1) {
-			LL_I2C_AcknowledgeNextData(I2C1, LL_I2C_NACK);
+			LL_I2C_AcknowledgeNextData(i2c, LL_I2C_NACK);
 			if ((flags & I2C_MSG_RESTART) == 0) {
 				LL_I2C_GenerateStopCondition(i2c);
 			}
