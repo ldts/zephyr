@@ -177,7 +177,7 @@ int msg_read(struct device *dev, struct i2c_msg *msg,
 		goto error;
 	}
 
-	msg_done(dev, flags);
+	msg_done(dev, flags | msg->flags);
 	LL_I2C_DisableIT_RX(i2c);
 
 	return 0;
@@ -244,7 +244,7 @@ int msg_read(struct device *dev, struct i2c_msg *msg,
 		NEXT(buf, len);
 	}
 
-	msg_done(dev, flags);
+	msg_done(dev, flags | msg->flags);
 
 	return 0;
 }
