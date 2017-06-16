@@ -191,6 +191,8 @@ static void i2c_stm32_irq_config_func_2(struct device *dev)
 
 #endif /* CONFIG_I2C_2 */
 
+#ifndef SOC_SERIES_STM32F1X
+
 #ifdef CONFIG_I2C_3
 
 #ifdef CONFIG_I2C_STM32_INTERRUPT
@@ -231,3 +233,5 @@ static void i2c_stm32_irq_config_func_3(struct device *dev)
 #endif
 
 #endif /* CONFIG_I2C_3 */
+
+#endif /* SOC_SERIES_STM32F1X */
