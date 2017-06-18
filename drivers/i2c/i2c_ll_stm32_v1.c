@@ -4,7 +4,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * I2C Driver for: STM32F1 and STM32F4
+ * I2C Driver for: STM32F1, STM32F4 and STM32L1
  *
  */
 
@@ -101,7 +101,7 @@ static inline void handle_rxne(I2C_TypeDef *i2c, struct i2c_stm32_data *data)
 	k_sem_give(&data->device_sync_sem);
 }
 
-void i2c_stm32_ev_isr(void *arg)
+void i2c_stm32_event_isr(void *arg)
 {
 	const struct i2c_stm32_config *cfg = DEV_CFG((struct device *)arg);
 	struct i2c_stm32_data *data = DEV_DATA((struct device *)arg);
@@ -120,7 +120,7 @@ void i2c_stm32_ev_isr(void *arg)
 	}
 }
 
-void i2c_stm32_er_isr(void *arg)
+void i2c_stm32_error_isr(void *arg)
 {
 	const struct i2c_stm32_config *cfg = DEV_CFG((struct device *)arg);
 	struct i2c_stm32_data *data = DEV_DATA((struct device *)arg);

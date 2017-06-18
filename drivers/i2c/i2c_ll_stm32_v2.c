@@ -65,7 +65,7 @@ static inline void msg_done(struct device *dev, unsigned int flags)
 }
 
 #ifdef CONFIG_I2C_STM32_INTERRUPT
-void i2c_stm32_ev_isr(void *arg)
+void i2c_stm32_event_isr(void *arg)
 {
 	const struct i2c_stm32_config *cfg = DEV_CFG((struct device *)arg);
 	struct i2c_stm32_data *data = DEV_DATA((struct device *)arg);
@@ -97,7 +97,7 @@ error:
 	k_sem_give(&data->device_sync_sem);
 }
 
-void i2c_stm32_er_isr(void *arg)
+void i2c_stm32_error_isr(void *arg)
 {
 	const struct i2c_stm32_config *cfg = DEV_CFG((struct device *)arg);
 	struct i2c_stm32_data *data = DEV_DATA((struct device *)arg);

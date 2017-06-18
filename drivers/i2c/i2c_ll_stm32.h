@@ -52,10 +52,10 @@ struct i2c_stm32_data {
 do { p++; len--; } while (0)
 
 s32_t msg_write(struct device *dev, struct i2c_msg *msg, u32_t flags,
-	 u16_t saddr);
+		u16_t saddr);
 s32_t msg_read(struct device *dev, struct i2c_msg *msg, u32_t flags,
-	u16_t saddr);
+	       u16_t saddr);
 s32_t i2c_configure_timing(struct device *dev, u32_t clock);
-void i2c_stm32_ev_isr(void *args);
-void i2c_stm32_er_isr(void *args);
+void i2c_stm32_event_isr(void *args);
+void i2c_stm32_error_isr(void *args);
 #endif	/* _STM32_I2C_H_ */
