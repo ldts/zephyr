@@ -108,6 +108,9 @@ static int frdm_k64f_pinmux_init(struct device *dev)
 					| PORT_PCR_ODE_MASK);
 	pinmux_pin_set(porte, 25, PORT_PCR_MUX(kPORT_MuxAlt5)
 					| PORT_PCR_ODE_MASK);
+#else
+	pinmux_pin_set(porte, 24, PORT_PCR_MUX(kPORT_MuxAsGpio));
+	pinmux_pin_set(porte, 25, PORT_PCR_MUX(kPORT_MuxAsGpio));
 #endif
 
 #if CONFIG_ADC_1
