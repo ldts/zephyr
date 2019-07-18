@@ -105,6 +105,7 @@ void main(void)
 	struct device *gpio_in_dev;
 	struct test_config {
 		int loop_for_ever;
+		s64_t loop_for_ever_start;
 		u64_t max_latency;
 		int max_latency_on;
 		int duration;
@@ -205,6 +206,7 @@ again:
 
 	config.max_latency_on = 0;
 	config.loop_for_ever = 0;
+	config.loop_for_ever_start = 0;
 	config.max_latency = 0;
 	runs = 0;
 	val = console_getline();
@@ -219,6 +221,7 @@ again:
 		config.duration = 1;
 	} else if (*val == '~') {
 		config.loop_for_ever = 1;
+		config.loop_for_ever_start = k_uptime_get();
 		config.duration = 1;
 
 		for (i =0; i < ARRAY_LEN(fixed_bins); i++) {
@@ -301,11 +304,21 @@ run:
 
 		if (atomic_get(&stamp) != STAMP_SEED) {
 			if (config.loop_for_ever) {
+				s64_t now = k_uptime_get() / 1000;
+				s64_t secs = now  - config.loop_for_ever_start / 1000;
+				s64_t hours, minutes;
+				hours = secs / 3600;
+				secs = secs - hours * 3600;
+				minutes = secs / 60;
+				secs = secs - minutes * 60;
+
 				printk("\nLatency test:\n");
 				printk(" nsamples    : %lld\n", (runs - 1) * nsamples + cnt);
 				printk(" max latency : %lld nsec\n", max_latency);
 				printk(" min latency : %lld nsec\n", min_latency);
 				printk(" overflows   : %04d\n", fixed_bin_overflows);
+				printk(" duration    : %04lld:%02lld:%02lld\n",
+					hours, minutes, secs);
 				printk("------- latency --------- -- nbr --  ---------------- chart ----------------------\n");
 				for (i = 0; i < ARRAY_LEN(fixed_bins); i++) {
 					char bar[50] = { '\0' };
@@ -420,9 +433,19 @@ run:
 
 	if (config.loop_for_ever) {
 		if (max > max_latency) {
+			s64_t now = k_uptime_get() / 1000;
+			s64_t secs = now  - config.loop_for_ever_start / 1000;
+			s64_t hours, minutes;
+
 			max_latency = max;
+			hours = secs / 3600;
+			secs = secs - hours * 3600;
+			minutes = secs / 60;
+			secs = secs - minutes * 60;
 			/* some feedback in the loop for ever case */
-			printk(" max latency hit : %lld nsec\n", max_latency);
+			printk(" max latency hit : %08lld nsec, samples: %08lld time: %04lld:%02lld:%02lld\n",
+				max_latency, (runs - 1) * nsamples,
+				hours, minutes, secs);
 		}
 		if (min < min_latency)
 			min_latency = min;
