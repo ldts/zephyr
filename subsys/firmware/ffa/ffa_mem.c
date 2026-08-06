@@ -111,7 +111,8 @@ int ffa_mem_share_impl(struct ffa_drv_state *st,
 	struct arm_smccc_1_2_regs smc_args = {0};
 	struct arm_smccc_1_2_regs smc_ret  = {0};
 	uint8_t *tx = (uint8_t *)st->tx_buf;
-	uint32_t tx_sz = st->rxtx_pages * FFA_PAGE_SIZE;
+	uint32_t tx_sz = (st->tx_sz != 0U) ? st->tx_sz
+					    : st->rxtx_pages * FFA_PAGE_SIZE;
 	uint32_t total_pg = 0U;
 	uint32_t hdr_sz;
 	uint32_t cap_first;

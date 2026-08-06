@@ -219,7 +219,8 @@ struct ffa_drv_state {
 	enum arm_smccc_conduit conduit;
 	void *tx_buf;
 	void *rx_buf;
-	uint32_t rxtx_pages;        /* pages per buffer */
+	uint32_t rxtx_pages;        /* pages per buffer (drives tx_sz when tx_sz==0) */
+	uint32_t tx_sz;             /* TX buffer size in bytes (0 = use rxtx_pages*PAGE_SIZE) */
 	struct k_mutex lock;        /* serializes RX buffer use */
 };
 

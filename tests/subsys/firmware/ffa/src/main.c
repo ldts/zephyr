@@ -714,7 +714,11 @@ ZTEST(ffa_core, test_mem_share_frag_tx)
 		.version    = FFA_VERSION_1_1,
 		.vm_id      = 0x8001U,
 		.tx_buf     = mem_tx_buf,
-		.rxtx_pages = 1U,
+		/* TX = 96 bytes: hdr_sz(80) + 1 constituent(16) = 96.
+		 * first_frag_capacity = (96-80)/16 = 1, so only 1 of the
+		 * 3 constituents goes into the initial MEM_SHARE call; the
+		 * remaining 2 are sent via FRAG_TX. */
+		.tx_sz      = 96U,
 	};
 
 	k_mutex_init(&st.lock);
@@ -732,12 +736,16 @@ ZTEST(ffa_core, test_mem_share_frag_tx)
 
 	zassert_equal(ffa_mem_share_impl(&st, &args), 0, NULL);
 
-	/* First call: FFA_FN64_MEM_SHARE. */
+	/* First call: FFA_FN64_MEM_SHARE with total=128, frag=96 (1 constituent). */
 	zassert_equal(mock_seen[0].a0, FFA_FN64_MEM_SHARE, NULL);
+	zassert_equal(mock_seen[0].a1, 128U, "total_desc_sz = 80+3*16");
+	zassert_equal(mock_seen[0].a2, 96U,  "first_frag_sz = 80+1*16");
 	/* Second call: FFA_MEM_FRAG_TX with partial handle from FRAG_RX. */
 	zassert_equal(mock_seen[1].a0, FFA_MEM_FRAG_TX, "second call is FRAG_TX");
 	zassert_equal(mock_seen[1].a1, 0xAABBCCDDU, "frag handle lo");
 	zassert_equal(mock_seen[1].a2, 0xEEFF0011U, "frag handle hi");
+	/* FRAG_TX carries the remaining 2 constituents = 32 bytes. */
+	zassert_equal((uint32_t)mock_seen[1].a3, 32U, "frag_tx sz = 2*16");
 	/* g_handle from SUCCESS_64. */
 	zassert_equal(args.g_handle,
 		      ((uint64_t)0xBEEFU << 32) | 0xFEEDU, NULL);
