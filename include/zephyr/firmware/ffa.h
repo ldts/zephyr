@@ -14,6 +14,13 @@
 extern "C" {
 #endif
 
+/**
+ * @brief Arm FF-A (Firmware Framework for A-profile) Core API
+ * @defgroup ffa_core_api Arm FF-A Core API
+ * @ingroup os_services
+ * @{
+ */
+
 /** A 16-byte FF-A partition UUID, little-endian byte order per the FF-A spec. */
 struct ffa_uuid {
 	uint8_t bytes[16];
@@ -35,6 +42,8 @@ int ffa_version(uint32_t *out);
  * @retval 0 on success, -EAGAIN if FF-A is not available.
  */
 int ffa_id_get(uint16_t *vm_id);
+
+/** @} */
 
 #ifdef __cplusplus
 }
