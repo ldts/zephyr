@@ -13,6 +13,7 @@ module-str = tee
 
 comment "Device Drivers"
 
-source "drivers/tee/optee/Kconfig"
-
 endif # TEE
+
+# Source unconditionally so OPTEE_FFA can select TEE without a loop.
+source "drivers/tee/optee/Kconfig"
