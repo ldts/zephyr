@@ -102,7 +102,6 @@ struct optee_ffa_data {
 	struct optee_ffa_supp supp;
 	sys_dlist_t notif_list;
 	struct k_spinlock notif_lock;
-	sys_bitarray_t *notif_bitmap;
 };
 
 /* ------------------------------------------------------------------ */
