@@ -9,6 +9,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/arch/arm64/arm-smccc.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/init.h>
+#include <zephyr/firmware/ffa.h>
 #include "ffa_internal.h"
 
 LOG_MODULE_REGISTER(arm_ffa, CONFIG_ARM_FFA_LOG_LEVEL);
@@ -124,3 +126,118 @@ int ffa_negotiate_version(struct ffa_drv_state *st)
 	return 0;
 }
 
+/* RXTX buffer note: static .bss buffers are acceptable for QEMU simulation;
+ * production use on hardware with non-coherent caches may require DMA-safe
+ * allocation. This is revisited in SP-5 (OP-TEE transport bring-up). */
+#define FFA_RXTX_BUF_SIZE (CONFIG_ARM_FFA_RXTX_PAGES * FFA_PAGE_SIZE)
+
+static uint8_t ffa_tx_buf[FFA_RXTX_BUF_SIZE] __aligned(FFA_PAGE_SIZE);
+static uint8_t ffa_rx_buf[FFA_RXTX_BUF_SIZE] __aligned(FFA_PAGE_SIZE);
+
+static struct ffa_drv_state ffa_state;
+
+enum arm_smccc_conduit ffa_detect_conduit(void)
+{
+	/*
+	 * SP-2a: Zephyr as the single NS endpoint on qemu_cortex_a53 uses SMC.
+	 * DT-driven conduit selection (smc/hvc) arrives with the OP-TEE FF-A
+	 * transport in SP-5, mirroring the existing OP-TEE SMC driver.
+	 */
+	return SMCCC_CONDUIT_SMC;
+}
+
+int ffa_rxtx_map(struct ffa_drv_state *st)
+{
+	struct arm_smccc_1_2_regs args = {0};
+	struct arm_smccc_1_2_regs res = {0};
+
+	args.a0 = FFA_RXTX_MAP_64;
+	args.a1 = (unsigned long)(uintptr_t)st->tx_buf;
+	args.a2 = (unsigned long)(uintptr_t)st->rx_buf;
+	args.a3 = st->rxtx_pages;
+	ffa_invoke(st, &args, &res);
+
+	if ((uint32_t)res.a0 == FFA_ERROR) {
+		return ffa_to_errno((int)res.a2);
+	}
+	return 0;
+}
+
+bool ffa_is_available(void)
+{
+	return ffa_state.available;
+}
+
+int ffa_version(uint32_t *out)
+{
+	if (!ffa_state.available) {
+		return -EAGAIN;
+	}
+	if (out != NULL) {
+		*out = ffa_state.version;
+	}
+	return 0;
+}
+
+int ffa_id_get(uint16_t *vm_id)
+{
+	if (!ffa_state.available) {
+		return -EAGAIN;
+	}
+	if (vm_id != NULL) {
+		*vm_id = ffa_state.vm_id;
+	}
+	return 0;
+}
+
+static int ffa_init(void)
+{
+	struct ffa_drv_state *st = &ffa_state;
+	int ret;
+
+	k_mutex_init(&st->lock);
+	st->tx_buf = ffa_tx_buf;
+	st->rx_buf = ffa_rx_buf;
+	st->rxtx_pages = CONFIG_ARM_FFA_RXTX_PAGES;
+	st->conduit = ffa_detect_conduit();
+
+#ifndef CONFIG_ZTEST
+	ffa_conduit_fn = (st->conduit == SMCCC_CONDUIT_HVC)
+			? arm_smccc_1_2_hvc : arm_smccc_1_2_smc;
+#endif
+
+	if (ffa_conduit_fn == NULL) {
+		LOG_INF("FF-A: no conduit configured; core idle");
+		return 0;
+	}
+
+	ret = ffa_negotiate_version(st);
+	if (ret != 0) {
+		LOG_WRN("FF-A not available: version negotiation failed (%d)", ret);
+		return 0;
+	}
+
+	ret = ffa_get_id(st);
+	if (ret != 0) {
+		LOG_WRN("FF-A not available: ID_GET failed (%d)", ret);
+		return 0;
+	}
+
+	ret = ffa_query_feature(st, FFA_RXTX_MAP_64, NULL);
+	if (ret != 0) {
+		LOG_INF("FFA_RXTX_MAP feature not advertised (%d)", ret);
+	}
+
+	ret = ffa_rxtx_map(st);
+	if (ret != 0) {
+		LOG_WRN("FF-A not available: RXTX_MAP failed (%d)", ret);
+		return 0;
+	}
+
+	st->available = true;
+	LOG_INF("FF-A core ready (v1.%u, id 0x%04x)",
+		FFA_VERSION_MINOR(st->version), st->vm_id);
+	return 0;
+}
+
+SYS_INIT(ffa_init, POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);

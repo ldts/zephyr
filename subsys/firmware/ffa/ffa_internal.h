@@ -90,6 +90,9 @@ int ffa_get_id(struct ffa_drv_state *st);
 int ffa_query_feature(struct ffa_drv_state *st, uint32_t ffa_func_id,
 		      uint32_t *out);
 
+int ffa_rxtx_map(struct ffa_drv_state *st);
+enum arm_smccc_conduit ffa_detect_conduit(void);
+
 #ifdef CONFIG_ZTEST
 void ffa_test_set_conduit(ffa_conduit_fn_t fn);
 #endif

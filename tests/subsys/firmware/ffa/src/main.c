@@ -7,6 +7,7 @@
 #include <zephyr/ztest.h>
 #include <errno.h>
 #include "ffa_internal.h"
+#include <zephyr/firmware/ffa.h>
 
 ZTEST(ffa_core, test_to_errno_mapping)
 {
@@ -160,6 +161,54 @@ ZTEST(ffa_core, test_features_not_supported)
 	set_mock_error(FFA_RET_NOT_SUPPORTED);
 
 	zassert_equal(ffa_query_feature(&st, FFA_RXTX_MAP_64, &props), -ENOTSUP, NULL);
+}
+
+ZTEST(ffa_core, test_rxtx_map_marshalling)
+{
+	static uint8_t txb[FFA_PAGE_SIZE] __aligned(FFA_PAGE_SIZE);
+	static uint8_t rxb[FFA_PAGE_SIZE] __aligned(FFA_PAGE_SIZE);
+	struct ffa_drv_state st = {0};
+
+	st.tx_buf = txb;
+	st.rx_buf = rxb;
+	st.rxtx_pages = 1;
+
+	ffa_test_set_conduit(mock_conduit);
+	set_mock_success(0);
+
+	zassert_equal(ffa_rxtx_map(&st), 0, NULL);
+	zassert_equal(mock_last_args.a0, FFA_RXTX_MAP_64, NULL);
+	zassert_equal(mock_last_args.a1, (unsigned long)(uintptr_t)txb, "tx addr");
+	zassert_equal(mock_last_args.a2, (unsigned long)(uintptr_t)rxb, "rx addr");
+	zassert_equal(mock_last_args.a3, 1, "page count");
+}
+
+ZTEST(ffa_core, test_rxtx_map_error)
+{
+	static uint8_t txb[FFA_PAGE_SIZE] __aligned(FFA_PAGE_SIZE);
+	static uint8_t rxb[FFA_PAGE_SIZE] __aligned(FFA_PAGE_SIZE);
+	struct ffa_drv_state st = { .tx_buf = txb, .rx_buf = rxb, .rxtx_pages = 1 };
+
+	ffa_test_set_conduit(mock_conduit);
+	set_mock_error(FFA_RET_NO_MEMORY);
+
+	zassert_equal(ffa_rxtx_map(&st), -ENOMEM, NULL);
+}
+
+/* After boot SYS_INIT ran with the real (SMC) conduit but no responder, so
+ * FF-A must report unavailable rather than crashing. */
+ZTEST(ffa_core, test_public_accessors_when_unavailable)
+{
+	uint32_t v = 0;
+	uint16_t id = 0;
+
+	if (!ffa_is_available()) {
+		zassert_equal(ffa_version(&v), -EAGAIN, NULL);
+		zassert_equal(ffa_id_get(&id), -EAGAIN, NULL);
+	} else {
+		zassert_equal(ffa_version(&v), 0, NULL);
+		zassert_equal(ffa_id_get(&id), 0, NULL);
+	}
 }
 
 ZTEST_SUITE(ffa_core, NULL, NULL, NULL, NULL, NULL);
