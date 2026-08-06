@@ -8,7 +8,10 @@
 #include <stddef.h>
 #include <zephyr/kernel.h>
 #include <zephyr/arch/arm64/arm-smccc.h>
+#include <zephyr/logging/log.h>
 #include "ffa_internal.h"
+
+LOG_MODULE_REGISTER(arm_ffa, CONFIG_ARM_FFA_LOG_LEVEL);
 
 /* SP-1 deferred layout guards: the asm in smccc-call.S relies on these. */
 BUILD_ASSERT(sizeof(struct arm_smccc_1_2_regs) == 18 * sizeof(unsigned long),
@@ -32,3 +35,58 @@ int ffa_to_errno(int ffa_ret)
 	default:                         return -EINVAL;
 	}
 }
+
+/* Default conduit set at init; overridable by tests. */
+static ffa_conduit_fn_t ffa_conduit_fn;
+
+void ffa_invoke(struct ffa_drv_state *st, struct arm_smccc_1_2_regs *args,
+		struct arm_smccc_1_2_regs *res)
+{
+	ARG_UNUSED(st);
+	__ASSERT_NO_MSG(ffa_conduit_fn != NULL);
+	ffa_conduit_fn(args, res);
+}
+
+#ifdef CONFIG_ZTEST
+void ffa_test_set_conduit(ffa_conduit_fn_t fn)
+{
+	ffa_conduit_fn = fn;
+}
+#endif
+
+int ffa_negotiate_version(struct ffa_drv_state *st)
+{
+	struct arm_smccc_1_2_regs args = {0};
+	struct arm_smccc_1_2_regs res = {0};
+	uint32_t ret;
+	uint16_t major, minor;
+
+	args.a0 = FFA_VERSION;
+	args.a1 = FFA_VERSION_1_2;
+	ffa_invoke(st, &args, &res);
+
+	ret = (uint32_t)res.a0;
+	if (ret == FFA_VERSION_NOT_SUPPORTED || (ret & 0x80000000U)) {
+		LOG_ERR("FFA_VERSION not supported by SPMC");
+		return -ENOTSUP;
+	}
+
+	major = FFA_VERSION_MAJOR(ret);
+	minor = FFA_VERSION_MINOR(ret);
+	if (major != 1) {
+		LOG_ERR("Unsupported FF-A major version %u", major);
+		return -ENOTSUP;
+	}
+
+	if (minor >= 2) {
+		st->version = FFA_VERSION_1_2;
+	} else if (minor == 1) {
+		st->version = FFA_VERSION_1_1;
+	} else {
+		st->version = FFA_VERSION_1_0;
+	}
+
+	LOG_INF("FF-A version negotiated: 1.%u", FFA_VERSION_MINOR(st->version));
+	return 0;
+}
+
