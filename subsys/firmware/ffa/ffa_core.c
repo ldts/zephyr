@@ -134,7 +134,7 @@ int ffa_negotiate_version(struct ffa_drv_state *st)
 static uint8_t ffa_tx_buf[FFA_RXTX_BUF_SIZE] __aligned(FFA_PAGE_SIZE);
 static uint8_t ffa_rx_buf[FFA_RXTX_BUF_SIZE] __aligned(FFA_PAGE_SIZE);
 
-static struct ffa_drv_state ffa_state;
+struct ffa_drv_state ffa_state;
 
 enum arm_smccc_conduit ffa_detect_conduit(void)
 {

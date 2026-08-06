@@ -437,4 +437,45 @@ ZTEST(ffa_core, test_partition_info_error)
 	zassert_equal(ffa_partition_info_get_rxbuf(&st, &uuid, NULL, &count), -EINVAL, NULL);
 }
 
+ZTEST(ffa_core, test_partition_info_regs_decode)
+{
+	struct ffa_drv_state st = { .version = FFA_VERSION_1_2 };
+	struct ffa_uuid uuid = {0};
+	struct ffa_partition_info out[1];
+	size_t count = 1;
+
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	/* a2: last_idx=0 (count=1), cur_idx=0, tag=0, size=... ; record in a3..a5 */
+	struct arm_smccc_1_2_regs r = { .a0 = FFA_SUCCESS_64, .a2 = 0 /*last_idx 0 => count 1*/ };
+	r.a3 = (uint64_t)0x8001 | ((uint64_t)1 << 16) | ((uint64_t)0x3 << 32); /* id, exec, props */
+	r.a4 = 0x0706050403020100UL; /* uuid[0..7] */
+	r.a5 = 0x0F0E0D0C0B0A0908UL; /* uuid[8..15] */
+	mock_script[0] = r;
+	mock_script_len = 1;
+
+	zassert_equal(ffa_partition_info_get_regs(&st, &uuid, out, &count), 0, NULL);
+	zassert_equal(mock_seen[0].a0, FFA_PARTITION_INFO_GET_REGS, NULL);
+	zassert_equal(count, 1, NULL);
+	zassert_equal(out[0].id, 0x8001, NULL);
+	zassert_equal(out[0].exec_ctxt, 1, NULL);
+	zassert_equal(out[0].properties, 0x3, NULL);
+	zassert_equal(out[0].uuid.bytes[0], 0, NULL);
+	zassert_equal(out[0].uuid.bytes[15], 15, NULL);
+}
+
+ZTEST(ffa_core, test_public_msg_unavailable)
+{
+	struct ffa_send_direct_data d = {0};
+	struct ffa_uuid uuid = {0};
+	struct ffa_send_direct_data2 d2 = {0};
+	size_t count = 0;
+
+	if (!ffa_is_available()) {
+		zassert_equal(ffa_partition_info_get(&uuid, NULL, &count), -EAGAIN, NULL);
+		zassert_equal(ffa_msg_send_direct_req(0x1, &d), -EAGAIN, NULL);
+		zassert_equal(ffa_msg_send_direct_req2(0x1, &uuid, &d2), -EAGAIN, NULL);
+	}
+}
+
 ZTEST_SUITE(ffa_core, NULL, NULL, NULL, NULL, NULL);

@@ -139,4 +139,12 @@ int ffa_partition_info_get_rxbuf(struct ffa_drv_state *st,
 				 const struct ffa_uuid *uuid,
 				 struct ffa_partition_info *out, size_t *count);
 
+int ffa_partition_info_get_regs(struct ffa_drv_state *st,
+				const struct ffa_uuid *uuid,
+				struct ffa_partition_info *out, size_t *count);
+
+/* Singleton driver state — non-static so ffa_msg.c can reference it directly.
+ * Buffers remain static in ffa_core.c. */
+extern struct ffa_drv_state ffa_state;
+
 #endif /* ZEPHYR_SUBSYS_FIRMWARE_FFA_FFA_INTERNAL_H_ */
