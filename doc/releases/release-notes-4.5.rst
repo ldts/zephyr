@@ -233,6 +233,15 @@ New APIs and options
   * :c:macro:`DT_IRQN_BY_NAME`
   * :c:macro:`DT_INST_IRQN_BY_NAME`
 
+* Firmware
+
+  * :kconfig:option:`CONFIG_ARM_FFA` — Arm FF-A core subsystem (version
+    negotiation, endpoint-ID discovery, feature probing, RX/TX buffer mapping)
+  * :c:func:`ffa_is_available`
+  * :c:func:`ffa_version`
+  * :c:func:`ffa_id_get`
+  * :c:struct:`ffa_uuid`
+
 * Haptics
 
   * :c:enumerator:`haptics_monitor`
@@ -413,6 +422,13 @@ Libraries / Subsystems
 
   * Added :kconfig:option:`CONFIG_IMG_CUSTOM_SECTOR_SIZE` to allow MCUboot to use a different
     sector size for reducing the swap-using-offset status area size.
+
+* Firmware
+
+  * Added the Arm Firmware Framework for A-profile (FF-A) core subsystem
+    (:kconfig:option:`CONFIG_ARM_FFA`), providing version negotiation, endpoint
+    ID discovery, feature probing and RX/TX buffer mapping for a Zephyr
+    Normal-World endpoint. Built on the new SMCCC v1.2 call layer.
 
 * LoRa / LoRaWAN
 

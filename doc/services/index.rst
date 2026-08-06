@@ -132,6 +132,18 @@ different platforms.
 
          algorithms
 
+   .. grid-item-card:: :ref:`Firmware Services <firmware_services>`
+      :class-card: sd-index-card
+
+      .. rst-class:: sd-index-watermark
+
+      :material-twotone:`memory;7em`
+
+      .. toctree::
+         :maxdepth: 2
+
+         firmware/index
+
    .. grid-item-card:: :ref:`Frameworks <frameworks>`
       :class-card: sd-index-card
 
