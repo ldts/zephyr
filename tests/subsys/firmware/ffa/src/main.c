@@ -211,4 +211,107 @@ ZTEST(ffa_core, test_public_accessors_when_unavailable)
 	}
 }
 
+/* Scripted responses for multi-invoke sequences (e.g. INTERRUPT -> RUN -> RESP). */
+static struct arm_smccc_1_2_regs mock_script[4];
+static int mock_script_len;
+static int mock_script_pos;
+static struct arm_smccc_1_2_regs mock_seen[4];
+static int mock_seen_n;
+
+static void mock_script_conduit(const struct arm_smccc_1_2_regs *args,
+				struct arm_smccc_1_2_regs *res)
+{
+	if (mock_seen_n < (int)ARRAY_SIZE(mock_seen)) {
+		mock_seen[mock_seen_n++] = *args;
+	}
+	if (mock_script_pos < mock_script_len) {
+		*res = mock_script[mock_script_pos++];
+	} else {
+		memset(res, 0, sizeof(*res));
+	}
+}
+
+static void mock_script_reset(void)
+{
+	mock_script_len = 0;
+	mock_script_pos = 0;
+	mock_seen_n = 0;
+	memset(mock_script, 0, sizeof(mock_script));
+	memset(mock_seen, 0, sizeof(mock_seen));
+}
+
+ZTEST(ffa_core, test_direct_req_roundtrip_64)
+{
+	struct ffa_drv_state st = {0};
+	struct ffa_send_direct_data d = {
+		.data0 = 0x11, .data1 = 0x22, .data2 = 0x33,
+		.data3 = 0x44, .data4 = 0x55,
+	};
+
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	/* single response: RESP_64 with echoed+1 payload */
+	mock_script[0] = (struct arm_smccc_1_2_regs){
+		.a0 = FFA_MSG_SEND_DIRECT_RESP_64,
+		.a3 = 0x111, .a4 = 0x222, .a5 = 0x333, .a6 = 0x444, .a7 = 0x555,
+	};
+	mock_script_len = 1;
+
+	zassert_equal(ffa_send_direct_req(&st, 0x8001, false, &d), 0, NULL);
+	/* request marshalling */
+	zassert_equal(mock_seen[0].a0, FFA_MSG_SEND_DIRECT_REQ_64, NULL);
+	zassert_equal(mock_seen[0].a1, FFA_PACK_TARGET_INFO(st.vm_id, 0x8001), NULL);
+	zassert_equal(mock_seen[0].a2, 0, NULL);
+	zassert_equal(mock_seen[0].a3, 0x11, NULL);
+	zassert_equal(mock_seen[0].a7, 0x55, NULL);
+	/* response unpacked */
+	zassert_equal(d.data0, 0x111, NULL);
+	zassert_equal(d.data4, 0x555, NULL);
+}
+
+ZTEST(ffa_core, test_direct_req_32bit_fid)
+{
+	struct ffa_drv_state st = {0};
+	struct ffa_send_direct_data d = {0};
+
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	mock_script[0] = (struct arm_smccc_1_2_regs){ .a0 = FFA_MSG_SEND_DIRECT_RESP_32 };
+	mock_script_len = 1;
+
+	zassert_equal(ffa_send_direct_req(&st, 0x1, true, &d), 0, NULL);
+	zassert_equal(mock_seen[0].a0, FFA_MSG_SEND_DIRECT_REQ_32, NULL);
+}
+
+ZTEST(ffa_core, test_direct_req_completion_loop)
+{
+	struct ffa_drv_state st = {0};
+	struct ffa_send_direct_data d = {0};
+
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	/* INTERRUPT (a1 carries the target for FFA_RUN) then real RESP */
+	mock_script[0] = (struct arm_smccc_1_2_regs){ .a0 = FFA_INTERRUPT, .a1 = 0xABCD };
+	mock_script[1] = (struct arm_smccc_1_2_regs){ .a0 = FFA_MSG_SEND_DIRECT_RESP_64 };
+	mock_script_len = 2;
+
+	zassert_equal(ffa_send_direct_req(&st, 0x2, false, &d), 0, NULL);
+	/* second invoke must be FFA_RUN with a1 from the interrupt */
+	zassert_equal(mock_seen[1].a0, FFA_RUN, NULL);
+	zassert_equal(mock_seen[1].a1, 0xABCD, NULL);
+}
+
+ZTEST(ffa_core, test_direct_req_error)
+{
+	struct ffa_drv_state st = {0};
+	struct ffa_send_direct_data d = {0};
+
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	mock_script[0] = (struct arm_smccc_1_2_regs){ .a0 = FFA_ERROR, .a2 = (unsigned long)FFA_RET_BUSY };
+	mock_script_len = 1;
+
+	zassert_equal(ffa_send_direct_req(&st, 0x3, false, &d), -EBUSY, NULL);
+}
+
 ZTEST_SUITE(ffa_core, NULL, NULL, NULL, NULL, NULL);

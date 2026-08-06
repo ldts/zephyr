@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <zephyr/kernel.h>
 #include <zephyr/arch/arm64/arm-smccc.h>
+#include <zephyr/firmware/ffa.h>
 
 /* FF-A function IDs (SMC, fast call, owner=Standard). */
 #define FFA_ERROR                 0x84000060U
@@ -125,5 +126,8 @@ enum arm_smccc_conduit ffa_detect_conduit(void);
 #ifdef CONFIG_ZTEST
 void ffa_test_set_conduit(ffa_conduit_fn_t fn);
 #endif
+
+int ffa_send_direct_req(struct ffa_drv_state *st, uint16_t dst, bool mode_32bit,
+			struct ffa_send_direct_data *data);
 
 #endif /* ZEPHYR_SUBSYS_FIRMWARE_FFA_FFA_INTERNAL_H_ */
