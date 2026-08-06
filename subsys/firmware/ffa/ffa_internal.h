@@ -181,6 +181,7 @@ struct ffa_mem_region {
 #endif /* CONFIG_ARM_FFA_MEM_SHARE */
 
 /* Internal singleton driver state. */
+struct ffa_drv_state {
 	bool available;             /* FF-A init succeeded */
 	uint32_t version;           /* negotiated framework version */
 	uint16_t vm_id;             /* our endpoint ID (FFA_ID_GET) */
