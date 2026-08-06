@@ -32,8 +32,6 @@ config OPTEE_FFA
 	  yielding calls via FFA_MSG_SEND_DIRECT_REQ.  Shared memory is
 	  registered with FFA_MEM_SHARE and reclaimed after use.
 
-  Requires CONFIG_ARM_FFA=y and CONFIG_ARM_FFA_MEM_SHARE=y.
-
 config OPTEE_FFA_MAX_NOTIF
 	int "Max OP-TEE FF-A notification IDs"
 	depends on OPTEE_FFA
