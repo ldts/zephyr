@@ -195,7 +195,11 @@ int ffa_partition_info_get_rxbuf(struct ffa_drv_state *st,
 		}
 	}
 
-	if (!count_only) {
+	/* RX is populated (and must be released) whenever we did NOT send the
+	 * count-only flag - i.e. flags == 0 - regardless of caller intent. On
+	 * FF-A 1.0 a count-only request still triggers a full populate because
+	 * v1.0 has no count-only mode. */
+	if (flags == 0) {
 		(void)ffa_rx_release(st);
 	}
 	*count = reported;

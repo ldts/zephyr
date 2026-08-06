@@ -422,6 +422,34 @@ ZTEST(ffa_core, test_partition_info_count_only)
 	zassert_equal(mock_seen[0].a5, FFA_PARTITION_INFO_GET_COUNT_ONLY, NULL);
 }
 
+/* FF-A 1.0 has no count-only mode: a count-only request sends flags==0, so the
+ * SPMC does a full populate of the shared RX buffer. The driver must therefore
+ * release RX even though the caller only asked for a count. Regression for the
+ * leaked-RX bug that wedged the next RX-buffer query. */
+ZTEST(ffa_core, test_partition_info_v1_0_count_only_releases_rx)
+{
+	static uint8_t rxbuf[64] __aligned(8);
+	struct ffa_drv_state st = { .version = FFA_VERSION_1_0, .rx_buf = rxbuf };
+	struct ffa_uuid uuid = {0};
+	size_t count = 0;
+
+	k_mutex_init(&st.lock);
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	mock_script[0] = (struct arm_smccc_1_2_regs){ .a0 = FFA_SUCCESS_32, .a2 = 2 };
+	mock_script[1] = (struct arm_smccc_1_2_regs){ .a0 = FFA_SUCCESS_32 }; /* RX_RELEASE */
+	mock_script_len = 2;
+
+	zassert_equal(ffa_partition_info_get_rxbuf(&st, &uuid, NULL, &count), 0, NULL);
+	zassert_equal(count, 2, NULL);
+	/* v1.0 count-only must NOT send the count-only flag ... */
+	zassert_equal(mock_seen[0].a0, FFA_PARTITION_INFO_GET, NULL);
+	zassert_equal(mock_seen[0].a5, 0, "v1.0 has no count-only flag");
+	/* ... and MUST release the RX buffer the SPMC populated. */
+	zassert_equal(mock_seen[1].a0, FFA_RX_RELEASE, "v1.0 count-only releases RX");
+}
+
+
 ZTEST(ffa_core, test_partition_info_error)
 {
 	struct ffa_drv_state st = { .version = FFA_VERSION_1_1 };
