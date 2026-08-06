@@ -125,3 +125,83 @@ int ffa_send_direct_req2(struct ffa_drv_state *st, uint16_t dst,
 	return -EINVAL;
 }
 
+int ffa_rx_release(struct ffa_drv_state *st)
+{
+	struct arm_smccc_1_2_regs args = {0};
+	struct arm_smccc_1_2_regs ret = {0};
+
+	args.a0 = FFA_RX_RELEASE;
+	ffa_invoke(st, &args, &ret);
+	if ((uint32_t)ret.a0 == FFA_ERROR) {
+		return ffa_to_errno((int)ret.a2);
+	}
+	return 0;
+}
+
+int ffa_partition_info_get_rxbuf(struct ffa_drv_state *st,
+				 const struct ffa_uuid *uuid,
+				 struct ffa_partition_info *out, size_t *count)
+{
+	struct arm_smccc_1_2_regs args = {0};
+	struct arm_smccc_1_2_regs ret = {0};
+	uint32_t u[4];
+	uint32_t flags = 0;
+	uint32_t reported, rec_sz;
+	int rc = 0;
+	bool count_only = (out == NULL) || (*count == 0);
+
+	memcpy(u, uuid->bytes, sizeof(u));
+
+	if (count_only && st->version > FFA_VERSION_1_0) {
+		flags = FFA_PARTITION_INFO_GET_COUNT_ONLY;
+	}
+
+	k_mutex_lock(&st->lock, K_FOREVER);
+
+	args.a0 = FFA_PARTITION_INFO_GET;
+	args.a1 = u[0]; args.a2 = u[1]; args.a3 = u[2]; args.a4 = u[3];
+	args.a5 = flags;
+	ffa_invoke(st, &args, &ret);
+
+	if ((uint32_t)ret.a0 == FFA_ERROR) {
+		rc = ffa_to_errno((int)ret.a2);
+		goto out_unlock;
+	}
+
+	reported = (uint32_t)ret.a2;
+	rec_sz = (st->version > FFA_VERSION_1_0) ? (uint32_t)ret.a3
+						 : FFA_1_0_PARTITION_INFO_SZ;
+
+	if (out != NULL && !count_only) {
+		uint32_t n = (reported < *count) ? reported : (uint32_t)*count;
+		const uint8_t *base = st->rx_buf;
+
+		for (uint32_t i = 0; i < n; i++) {
+			const uint8_t *r = base + (size_t)i * rec_sz;
+			uint16_t id16, exec16;
+			uint32_t props32;
+
+			memcpy(&id16, r + 0, sizeof(id16));
+			memcpy(&exec16, r + 2, sizeof(exec16));
+			memcpy(&props32, r + 4, sizeof(props32));
+			out[i].id = id16;
+			out[i].exec_ctxt = exec16;
+			out[i].properties = props32;
+			memset(&out[i].uuid, 0, sizeof(out[i].uuid));
+			if (rec_sz > FFA_1_0_PARTITION_INFO_SZ) {
+				memcpy(out[i].uuid.bytes, r + 8,
+				       sizeof(out[i].uuid.bytes));
+			}
+		}
+	}
+
+	if (!count_only) {
+		(void)ffa_rx_release(st);
+	}
+	*count = reported;
+
+out_unlock:
+	k_mutex_unlock(&st->lock);
+	return rc;
+}
+
