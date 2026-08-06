@@ -86,6 +86,9 @@ int ffa_to_errno(int ffa_ret);
 void ffa_invoke(struct ffa_drv_state *st, struct arm_smccc_1_2_regs *args,
 		struct arm_smccc_1_2_regs *res);
 int ffa_negotiate_version(struct ffa_drv_state *st);
+int ffa_get_id(struct ffa_drv_state *st);
+int ffa_query_feature(struct ffa_drv_state *st, uint32_t ffa_func_id,
+		      uint32_t *out);
 
 #ifdef CONFIG_ZTEST
 void ffa_test_set_conduit(ffa_conduit_fn_t fn);

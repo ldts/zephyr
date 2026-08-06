@@ -54,6 +54,40 @@ void ffa_test_set_conduit(ffa_conduit_fn_t fn)
 }
 #endif
 
+int ffa_get_id(struct ffa_drv_state *st)
+{
+	struct arm_smccc_1_2_regs args = {0};
+	struct arm_smccc_1_2_regs res = {0};
+
+	args.a0 = FFA_ID_GET;
+	ffa_invoke(st, &args, &res);
+
+	if ((uint32_t)res.a0 == FFA_ERROR) {
+		return ffa_to_errno((int)res.a2);
+	}
+	st->vm_id = (uint16_t)(res.a2 & 0xFFFFU);
+	return 0;
+}
+
+int ffa_query_feature(struct ffa_drv_state *st, uint32_t ffa_func_id,
+		      uint32_t *out)
+{
+	struct arm_smccc_1_2_regs args = {0};
+	struct arm_smccc_1_2_regs res = {0};
+
+	args.a0 = FFA_FEATURES;
+	args.a1 = ffa_func_id;
+	ffa_invoke(st, &args, &res);
+
+	if ((uint32_t)res.a0 == FFA_ERROR) {
+		return ffa_to_errno((int)res.a2);
+	}
+	if (out != NULL) {
+		*out = (uint32_t)res.a2;
+	}
+	return 0;
+}
+
 int ffa_negotiate_version(struct ffa_drv_state *st)
 {
 	struct arm_smccc_1_2_regs args = {0};

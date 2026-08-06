@@ -99,4 +99,67 @@ ZTEST(ffa_core, test_version_bad_major)
 	zassert_equal(ffa_negotiate_version(&st), -ENOTSUP, NULL);
 }
 
+/* Helper: canned FFA_SUCCESS_32 with a chosen a2. */
+static void set_mock_success(unsigned long a2)
+{
+	memset(&mock_next_res, 0, sizeof(mock_next_res));
+	mock_next_res.a0 = FFA_SUCCESS_32;
+	mock_next_res.a2 = a2;
+}
+
+/* Helper: canned FFA_ERROR with a chosen error code in a2. */
+static void set_mock_error(long code)
+{
+	memset(&mock_next_res, 0, sizeof(mock_next_res));
+	mock_next_res.a0 = FFA_ERROR;
+	mock_next_res.a2 = (unsigned long)code;
+}
+
+ZTEST(ffa_core, test_id_get_success)
+{
+	struct ffa_drv_state st = {0};
+
+	ffa_test_set_conduit(mock_conduit);
+	set_mock_success(0x8001);
+
+	zassert_equal(ffa_get_id(&st), 0, NULL);
+	zassert_equal(st.vm_id, 0x8001, NULL);
+	zassert_equal(mock_last_args.a0, FFA_ID_GET, "function id");
+}
+
+ZTEST(ffa_core, test_id_get_error)
+{
+	struct ffa_drv_state st = {0};
+
+	ffa_test_set_conduit(mock_conduit);
+	set_mock_error(FFA_RET_NOT_SUPPORTED);
+
+	zassert_equal(ffa_get_id(&st), -ENOTSUP, NULL);
+}
+
+ZTEST(ffa_core, test_features_supported)
+{
+	struct ffa_drv_state st = {0};
+	uint32_t props = 0xdead;
+
+	ffa_test_set_conduit(mock_conduit);
+	set_mock_success(FFA_FEAT_RXTX_MIN_SZ_4K);
+
+	zassert_equal(ffa_query_feature(&st, FFA_RXTX_MAP_64, &props), 0, NULL);
+	zassert_equal(props, FFA_FEAT_RXTX_MIN_SZ_4K, NULL);
+	zassert_equal(mock_last_args.a0, FFA_FEATURES, NULL);
+	zassert_equal(mock_last_args.a1, FFA_RXTX_MAP_64, NULL);
+}
+
+ZTEST(ffa_core, test_features_not_supported)
+{
+	struct ffa_drv_state st = {0};
+	uint32_t props = 0;
+
+	ffa_test_set_conduit(mock_conduit);
+	set_mock_error(FFA_RET_NOT_SUPPORTED);
+
+	zassert_equal(ffa_query_feature(&st, FFA_RXTX_MAP_64, &props), -ENOTSUP, NULL);
+}
+
 ZTEST_SUITE(ffa_core, NULL, NULL, NULL, NULL, NULL);
