@@ -314,4 +314,60 @@ ZTEST(ffa_core, test_direct_req_error)
 	zassert_equal(ffa_send_direct_req(&st, 0x3, false, &d), -EBUSY, NULL);
 }
 
+ZTEST(ffa_core, test_direct_req2_roundtrip)
+{
+	struct ffa_drv_state st = { .version = FFA_VERSION_1_2 };
+	struct ffa_uuid uuid = { .bytes = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15} };
+	struct ffa_send_direct_data2 d = {0};
+
+	for (int i = 0; i < 14; i++) {
+		d.data[i] = 0x100 + i;
+	}
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	mock_script[0].a0 = FFA_MSG_SEND_DIRECT_RESP2;
+	for (int i = 0; i < 14; i++) {
+		((unsigned long *)&mock_script[0].a4)[i] = 0x200 + i;
+	}
+	mock_script_len = 1;
+
+	zassert_equal(ffa_send_direct_req2(&st, 0x8001, &uuid, &d), 0, NULL);
+	zassert_equal(mock_seen[0].a0, FFA_MSG_SEND_DIRECT_REQ2, NULL);
+	zassert_equal(mock_seen[0].a1, FFA_PACK_TARGET_INFO(st.vm_id, 0x8001), NULL);
+	/* a2 = LE u64 of bytes[0..7], a3 = LE u64 of bytes[8..15] */
+	zassert_equal(mock_seen[0].a2, 0x0706050403020100UL, NULL);
+	zassert_equal(mock_seen[0].a3, 0x0F0E0D0C0B0A0908UL, NULL);
+	/* payload x4.. carried data[0..13] */
+	zassert_equal(mock_seen[0].a4, 0x100, NULL);
+	zassert_equal(mock_seen[0].a17, 0x100 + 13, NULL);
+	/* response unpacked */
+	zassert_equal(d.data[0], 0x200, NULL);
+	zassert_equal(d.data[13], 0x200 + 13, NULL);
+}
+
+ZTEST(ffa_core, test_direct_req2_requires_1_2)
+{
+	struct ffa_drv_state st = { .version = FFA_VERSION_1_1 };
+	struct ffa_uuid uuid = {0};
+	struct ffa_send_direct_data2 d = {0};
+
+	ffa_test_set_conduit(mock_script_conduit); /* must not be invoked */
+	zassert_equal(ffa_send_direct_req2(&st, 0x1, &uuid, &d), -ENOTSUP, NULL);
+}
+
+ZTEST(ffa_core, test_direct_req2_error)
+{
+	struct ffa_drv_state st = { .version = FFA_VERSION_1_2 };
+	struct ffa_uuid uuid = {0};
+	struct ffa_send_direct_data2 d = {0};
+
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	mock_script[0].a0 = FFA_ERROR;
+	mock_script[0].a2 = (unsigned long)FFA_RET_DENIED;
+	mock_script_len = 1;
+
+	zassert_equal(ffa_send_direct_req2(&st, 0x1, &uuid, &d), -EACCES, NULL);
+}
+
 ZTEST_SUITE(ffa_core, NULL, NULL, NULL, NULL, NULL);

@@ -130,4 +130,8 @@ void ffa_test_set_conduit(ffa_conduit_fn_t fn);
 int ffa_send_direct_req(struct ffa_drv_state *st, uint16_t dst, bool mode_32bit,
 			struct ffa_send_direct_data *data);
 
+int ffa_send_direct_req2(struct ffa_drv_state *st, uint16_t dst,
+			 const struct ffa_uuid *uuid,
+			 struct ffa_send_direct_data2 *data);
+
 #endif /* ZEPHYR_SUBSYS_FIRMWARE_FFA_FFA_INTERNAL_H_ */
