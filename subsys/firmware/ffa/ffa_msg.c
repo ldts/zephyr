@@ -205,3 +205,117 @@ out_unlock:
 	return rc;
 }
 
+/* BUILD_ASSERT: a3..a17 must be 15 contiguous longs for _REGS record packing.
+ * Each record is 3 u64; up to 5 records per call = 15 words = a3..a17. */
+BUILD_ASSERT(offsetof(struct arm_smccc_1_2_regs, a17) ==
+	     offsetof(struct arm_smccc_1_2_regs, a3) + 14 * sizeof(unsigned long),
+	     "a3..a17 must be 15 contiguous longs for _REGS record packing");
+
+int ffa_partition_info_get_regs(struct ffa_drv_state *st,
+				const struct ffa_uuid *uuid,
+				struct ffa_partition_info *out, size_t *count)
+{
+	struct arm_smccc_1_2_regs args = {0};
+	struct arm_smccc_1_2_regs ret = {0};
+	uint32_t u[4];
+	uint16_t start_idx = 0;
+	uint16_t tag = 0;
+	size_t total_count = 0;
+	bool count_only = (out == NULL) || (*count == 0);
+	size_t out_idx = 0;
+
+	memcpy(u, uuid->bytes, sizeof(u));
+
+	do {
+		uint16_t cur_idx;
+		const unsigned long *regs;
+
+		args.a0 = FFA_PARTITION_INFO_GET_REGS;
+		args.a1 = ((uint64_t)u[1] << 32) | u[0];
+		args.a2 = ((uint64_t)u[3] << 32) | u[2];
+		args.a3 = (uint32_t)start_idx | ((uint32_t)tag << 16);
+
+		ffa_invoke(st, &args, &ret);
+
+		if ((uint32_t)ret.a0 == FFA_ERROR) {
+			return ffa_to_errno((int)ret.a2);
+		}
+
+		/* On first iteration, extract total count from last_idx+1. */
+		if (start_idx == 0) {
+			total_count = (size_t)FFA_PIG_REGS_LAST_IDX((uint64_t)ret.a2) + 1;
+			if (count_only) {
+				*count = total_count;
+				return 0;
+			}
+		}
+
+		cur_idx = FFA_PIG_REGS_CUR_IDX((uint64_t)ret.a2);
+		tag = FFA_PIG_REGS_TAG((uint64_t)ret.a2);
+
+		/* Unpack partition records from a3 onward; 3 u64 per record. */
+		regs = &ret.a3;
+		for (uint16_t i = start_idx; i <= cur_idx && out_idx < *count; i++) {
+			size_t rec_off = (size_t)(i - start_idx) * 3;
+			uint64_t word0, word1, word2;
+
+			word0 = (uint64_t)regs[rec_off];
+			word1 = (uint64_t)regs[rec_off + 1];
+			word2 = (uint64_t)regs[rec_off + 2];
+
+			out[out_idx].id = FFA_PIG_REC_ID(word0);
+			out[out_idx].exec_ctxt = FFA_PIG_REC_EXEC_CTXT(word0);
+			out[out_idx].properties = FFA_PIG_REC_PROPS(word0);
+			memcpy(&out[out_idx].uuid.bytes[0], &word1, sizeof(word1));
+			memcpy(&out[out_idx].uuid.bytes[8], &word2, sizeof(word2));
+			out_idx++;
+		}
+
+		start_idx = cur_idx + 1;
+	} while (start_idx < total_count);
+
+	*count = total_count;
+	return 0;
+}
+
+static int ffa_partition_info_get_impl(struct ffa_drv_state *st,
+				       const struct ffa_uuid *uuid,
+				       struct ffa_partition_info *out,
+				       size_t *count)
+{
+	if (st->version >= FFA_VERSION_1_2 &&
+	    ffa_query_feature(st, FFA_PARTITION_INFO_GET_REGS, NULL) == 0) {
+		return ffa_partition_info_get_regs(st, uuid, out, count);
+	}
+	return ffa_partition_info_get_rxbuf(st, uuid, out, count);
+}
+
+int ffa_partition_info_get(const struct ffa_uuid *uuid,
+			   struct ffa_partition_info *out, size_t *count)
+{
+	if (!ffa_is_available()) {
+		return -EAGAIN;
+	}
+	return ffa_partition_info_get_impl(&ffa_state, uuid, out, count);
+}
+
+int ffa_msg_send_direct_req(uint16_t dst, struct ffa_send_direct_data *data)
+{
+	if (!ffa_is_available()) {
+		return -EAGAIN;
+	}
+	/* NS endpoint talks to a 64-bit SP by default; 32-bit selection is a
+	 * per-partition property discovered via partition info (caller-driven
+	 * later). SP-2b uses native 64-bit. */
+	return ffa_send_direct_req(&ffa_state, dst, false, data);
+}
+
+int ffa_msg_send_direct_req2(uint16_t dst, const struct ffa_uuid *uuid,
+			     struct ffa_send_direct_data2 *data)
+{
+	if (!ffa_is_available()) {
+		return -EAGAIN;
+	}
+	return ffa_send_direct_req2(&ffa_state, dst, uuid, data);
+}
+
