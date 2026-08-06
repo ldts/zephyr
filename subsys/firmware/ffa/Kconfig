@@ -1,0 +1,30 @@
+# Copyright 2026 Qualcomm Innovation Center, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+config ARM_FFA
+	bool "Arm Firmware Framework for A-profile (FF-A) core"
+	depends on ARM64 && HAS_ARM_SMCCC
+	select ARM_SMCCC_1_2
+	help
+	  Enable the reusable FF-A core subsystem: version negotiation,
+	  endpoint-ID discovery, feature probing and RX/TX buffer mapping,
+	  built on the SMCCC v1.2 extended-register call primitive. Zephyr
+	  acts as the Normal-World FF-A endpoint (e.g. to talk to OP-TEE).
+
+if ARM_FFA
+
+config ARM_FFA_RXTX_PAGES
+	int "FF-A RX/TX buffer size (in 4 KiB pages)"
+	default 1
+	range 1 16
+	help
+	  Size of each of the RX and TX buffers mapped with FFA_RXTX_MAP,
+	  expressed in 4 KiB FF-A pages. The default of 1 page (4 KiB) is
+	  the FF-A minimum and is sufficient for partition discovery and
+	  direct messaging.
+
+module = ARM_FFA
+module-str = arm_ffa
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # ARM_FFA
