@@ -72,8 +72,6 @@ static void mock_handle_direct_req(const struct arm_smccc_1_2_regs *args,
 {
 	uint32_t svc = (uint32_t)args->a3;  /* data0 = service ID */
 
-	res->a0 = FFA_MSG_SEND_DIRECT_RESP_32;
-
 	switch (svc) {
 	case OPTEE_FFA_GET_API_VERSION:
 		res->a3 = OPTEE_FFA_VERSION_MAJOR;
@@ -122,6 +120,11 @@ static void mock_optee_ffa_conduit(const struct arm_smccc_1_2_regs *args,
 		break;
 
 	case FFA_MSG_SEND_DIRECT_REQ_32:
+	case FFA_MSG_SEND_DIRECT_REQ_64:
+		/* Pre-set success resp FID; error cases inside will override */
+		res->a0 = ((uint32_t)args->a0 == FFA_MSG_SEND_DIRECT_REQ_32)
+			  ? FFA_MSG_SEND_DIRECT_RESP_32
+			  : FFA_MSG_SEND_DIRECT_RESP_64;
 		mock_handle_direct_req(args, res);
 		break;
 
