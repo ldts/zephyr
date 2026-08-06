@@ -14,6 +14,11 @@
 
 LOG_MODULE_DECLARE(arm_ffa, CONFIG_ARM_FFA_LOG_LEVEL);
 
+/* a4..a17 must be 14 contiguous unsigned longs for REQ2 payload marshalling. */
+BUILD_ASSERT(offsetof(struct arm_smccc_1_2_regs, a17) ==
+	     offsetof(struct arm_smccc_1_2_regs, a4) + 13 * sizeof(unsigned long),
+	     "a4..a17 must be 14 contiguous longs for REQ2 payload marshalling");
+
 static void ffa_msg_wait_for_completion(struct ffa_drv_state *st,
 					struct arm_smccc_1_2_regs *ret)
 {
@@ -65,3 +70,58 @@ int ffa_send_direct_req(struct ffa_drv_state *st, uint16_t dst, bool mode_32bit,
 	}
 	return -EINVAL;
 }
+
+/* Read a little-endian u64 from a byte array without unaligned pointer casts. */
+static uint64_t ffa_uuid_lo(const struct ffa_uuid *u)
+{
+	uint64_t v;
+
+	memcpy(&v, &u->bytes[0], sizeof(v));
+	return v; /* AArch64 is little-endian; bytes[0] is the LSB */
+}
+
+static uint64_t ffa_uuid_hi(const struct ffa_uuid *u)
+{
+	uint64_t v;
+
+	memcpy(&v, &u->bytes[8], sizeof(v));
+	return v;
+}
+
+int ffa_send_direct_req2(struct ffa_drv_state *st, uint16_t dst,
+			 const struct ffa_uuid *uuid,
+			 struct ffa_send_direct_data2 *data)
+{
+	struct arm_smccc_1_2_regs args = {0};
+	struct arm_smccc_1_2_regs ret = {0};
+	unsigned long *argp = &args.a4;
+	unsigned long *retp;
+
+	if (st->version < FFA_VERSION_1_2) {
+		return -ENOTSUP;
+	}
+
+	args.a0 = FFA_MSG_SEND_DIRECT_REQ2;
+	args.a1 = FFA_PACK_TARGET_INFO(st->vm_id, dst);
+	args.a2 = ffa_uuid_lo(uuid);
+	args.a3 = ffa_uuid_hi(uuid);
+	for (int i = 0; i < 14; i++) {
+		argp[i] = data->data[i];
+	}
+
+	ffa_invoke(st, &args, &ret);
+	ffa_msg_wait_for_completion(st, &ret);
+
+	if ((uint32_t)ret.a0 == FFA_ERROR) {
+		return ffa_to_errno((int)ret.a2);
+	}
+	if ((uint32_t)ret.a0 == FFA_MSG_SEND_DIRECT_RESP2) {
+		retp = &ret.a4;
+		for (int i = 0; i < 14; i++) {
+			data->data[i] = retp[i];
+		}
+		return 0;
+	}
+	return -EINVAL;
+}
+
