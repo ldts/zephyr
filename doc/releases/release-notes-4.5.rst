@@ -250,6 +250,12 @@ New APIs and options
   * :c:struct:`ffa_partition_info`
   * :c:struct:`ffa_send_direct_data`
   * :c:struct:`ffa_send_direct_data2`
+  * :kconfig:option:`CONFIG_ARM_FFA_MEM_SHARE` — memory sharing
+    (:c:func:`ffa_mem_share` / :c:func:`ffa_mem_reclaim`), version-aware
+    descriptor construction (EMAD 16 bytes pre-v1.2, 32 bytes v1.2),
+    ``FFA_MEM_FRAG_TX`` loop for large descriptors
+  * :c:struct:`ffa_mem_region_addr_range`
+  * :c:struct:`ffa_mem_ops_args`
 
 * Haptics
 
@@ -440,6 +446,11 @@ Libraries / Subsystems
     Normal-World endpoint.  Extended with partition discovery
     (:c:func:`ffa_partition_info_get`) and direct messaging
     (:c:func:`ffa_msg_send_direct_req`, :c:func:`ffa_msg_send_direct_req2`).
+    Memory sharing added (:kconfig:option:`CONFIG_ARM_FFA_MEM_SHARE`):
+    :c:func:`ffa_mem_share` builds the version-aware FF-A composite
+    memory-region descriptor, issues ``FFA_FN64_MEM_SHARE``, and drives the
+    ``FFA_MEM_FRAG_TX`` loop for large descriptors;
+    :c:func:`ffa_mem_reclaim` releases a previously shared region.
     Built on the new SMCCC v1.2 call layer.
 
 * LoRa / LoRaWAN

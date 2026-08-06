@@ -84,12 +84,43 @@ the payload to fourteen ``unsigned long`` words (registers x4–x17) in
 :c:struct:`ffa_send_direct_data2`.  The function returns ``-ENOTSUP`` when
 the negotiated FF-A version is below 1.2.
 
+Memory Sharing
+**************
+
+Enable with :kconfig:option:`CONFIG_ARM_FFA_MEM_SHARE`.
+
+:c:func:`ffa_mem_share` shares one or more physical memory regions with a
+Secure Partition by building an FF-A composite memory-region descriptor in the
+TX buffer and issuing ``FFA_FN64_MEM_SHARE``.  On success the SPMC-assigned
+64-bit global handle is written into :c:member:`ffa_mem_ops_args.g_handle`.
+
+The caller supplies the borrower's endpoint ID in
+:c:member:`ffa_mem_ops_args.dst_id` and an array of
+:c:struct:`ffa_mem_region_addr_range` entries describing the physical pages to
+share.  Memory is shared as **Normal, Write-Back cacheable, Inner-Shareable,
+Read/Write** — the appropriate attributes for NS-to-SP shared memory.
+
+When the descriptor exceeds the TX buffer size, :c:func:`ffa_mem_share`
+automatically drives the ``FFA_MEM_FRAG_TX`` loop, sending the remaining
+:c:struct:`ffa_mem_region_addr_range` constituents in subsequent fragments until
+the SPMC accepts them all and returns ``FFA_SUCCESS_64`` with the final handle.
+
+The descriptor layout is version-aware:
+
+* **FF-A 1.0/1.1** — the per-receiver endpoint memory access descriptor
+  (EMAD) is 16 bytes.  ``composite_off`` is 64 (48-byte header + 16-byte EMAD).
+* **FF-A 1.2** — EMAD grows to 32 bytes (adds ``impdef_val[16]``).
+  ``composite_off`` is 80.
+
+:c:func:`ffa_mem_reclaim` releases a previously shared region.  Pass
+``FFA_MEM_RECLAIM_CLEAR`` in ``flags`` to ask the SPMC to zero the memory
+before returning it.
+
 Scope
 *****
 
 This subsystem provides the foundation for the following planned extensions:
 
-* **SP-3** — memory-sharing operations.
 * **SP-4** — notification support.
 
 Configuration
@@ -98,6 +129,9 @@ Configuration
 :kconfig:option:`CONFIG_ARM_FFA`
    Enable the FF-A core subsystem. Depends on ``ARM64``. Selects
    :kconfig:option:`CONFIG_ARM_SMCCC_1_2`.
+
+:kconfig:option:`CONFIG_ARM_FFA_MEM_SHARE`
+   Enable FF-A memory sharing (``FFA_MEM_SHARE`` / ``FFA_MEM_RECLAIM``).
 
 API Reference
 *************
