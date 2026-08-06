@@ -1,0 +1,8 @@
+common:
+  tags: arm64 ffa firmware
+tests:
+  subsys.firmware.ffa.core:
+    platform_allow:
+      - qemu_cortex_a53
+    integration_platforms:
+      - qemu_cortex_a53
