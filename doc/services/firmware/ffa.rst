@@ -116,12 +116,38 @@ The descriptor layout is version-aware:
 ``FFA_MEM_RECLAIM_CLEAR`` in ``flags`` to ask the SPMC to zero the memory
 before returning it.
 
+Notifications
+*************
+
+Enable with :kconfig:option:`CONFIG_ARM_FFA_NOTIF`.
+
+Before any notifications can be received, the subsystem calls
+``FFA_NOTIFICATION_BITMAP_CREATE`` during boot-time initialisation.  If the
+SPMC does not support notifications the flag
+:c:member:`ffa_drv_state.notif_enabled` is cleared and all notification API
+calls return ``-ENOTSUP``.
+
+:c:func:`ffa_notification_bind` subscribes to a set of notifications (identified
+by a 64-bit bitmap) from a named sender endpoint.
+
+:c:func:`ffa_notification_get` queries pending notifications.  The caller passes
+a combination of :c:macro:`FFA_NOTIF_GET_SP`, :c:macro:`FFA_NOTIF_GET_VM`, and
+:c:macro:`FFA_NOTIF_GET_SPM` flags to select which bitmaps to return.  The SP
+and VM bitmaps are OR'd into a single 64-bit result.
+
+:c:func:`ffa_notification_request` registers a :c:type:`ffa_notifier_cb`
+callback for a specific notification ID (0–63).
+
+:c:func:`ffa_notification_dispatch` polls ``FFA_NOTIFICATION_GET`` for all
+bitmap classes and dispatches any pending callbacks in one call.  It is suitable
+as a schedule-receiver poll handler when no DT interrupt is present.
+
 Scope
 *****
 
-This subsystem provides the foundation for the following planned extensions:
+This subsystem provides the foundation for the following planned extension:
 
-* **SP-4** — notification support.
+* **SP-5** — OP-TEE FF-A transport (``optee_ffa.c``).
 
 Configuration
 *************
@@ -132,6 +158,10 @@ Configuration
 
 :kconfig:option:`CONFIG_ARM_FFA_MEM_SHARE`
    Enable FF-A memory sharing (``FFA_MEM_SHARE`` / ``FFA_MEM_RECLAIM``).
+
+:kconfig:option:`CONFIG_ARM_FFA_NOTIF`
+   Enable FF-A endpoint notifications (``FFA_NOTIFICATION_BIND`` / ``SET`` /
+   ``GET`` / dispatch).
 
 API Reference
 *************

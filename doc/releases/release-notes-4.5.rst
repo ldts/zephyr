@@ -256,6 +256,13 @@ New APIs and options
     ``FFA_MEM_FRAG_TX`` loop for large descriptors
   * :c:struct:`ffa_mem_region_addr_range`
   * :c:struct:`ffa_mem_ops_args`
+  * :kconfig:option:`CONFIG_ARM_FFA_NOTIF` — FF-A endpoint notifications:
+    bitmap create/destroy, :c:func:`ffa_notification_bind` /
+    :c:func:`ffa_notification_unbind` / :c:func:`ffa_notification_set` /
+    :c:func:`ffa_notification_get`, per-ID callback registration
+    (:c:func:`ffa_notification_request` / :c:func:`ffa_notification_unregister`),
+    poll-dispatch helper (:c:func:`ffa_notification_dispatch`)
+  * :c:type:`ffa_notifier_cb`
 
 * Haptics
 
