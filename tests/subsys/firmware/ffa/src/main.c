@@ -529,4 +529,331 @@ ZTEST(ffa_core, test_public_msg_unavailable)
 	}
 }
 
+/*
+ * ---- SP-3: memory sharing tests ----
+ *
+ * All tests use ffa_mem_share_impl / ffa_mem_reclaim_impl with a local
+ * ffa_drv_state and a static TX buffer so no real SMCCC conduit is needed.
+ *
+ * Descriptor offsets for one receiver (v1.1, emad_size=16):
+ *   [0..47]   ffa_mem_region header
+ *   [48..63]  ffa_mem_region_attributes (16 bytes, no impdef_val)
+ *   [64..79]  ffa_composite_mem_region header
+ *   [80..]    ffa_mem_region_addr_range constituents
+ */
+#ifdef CONFIG_ARM_FFA_MEM_SHARE
+
+/* TX/RX buffers are required to be page-aligned; align statically. */
+static uint8_t mem_tx_buf[512] __aligned(8);
+
+/* Helper: read a little-endian u16 from a byte buffer at a given offset. */
+static uint16_t rd16(const uint8_t *buf, uint32_t off)
+{
+	uint16_t v;
+
+	memcpy(&v, &buf[off], sizeof(v));
+	return v;
+}
+
+/* Helper: read a little-endian u32 from a byte buffer at a given offset. */
+static uint32_t rd32(const uint8_t *buf, uint32_t off)
+{
+	uint32_t v;
+
+	memcpy(&v, &buf[off], sizeof(v));
+	return v;
+}
+
+/* Helper: read a little-endian u64 from a byte buffer at a given offset. */
+static uint64_t rd64(const uint8_t *buf, uint32_t off)
+{
+	uint64_t v;
+
+	memcpy(&v, &buf[off], sizeof(v));
+	return v;
+}
+
+/*
+ * Basic share: one constituent, v1.1, descriptor fits in TX buffer.
+ * Verify FFA_FN64_MEM_SHARE is called with correct a1/a2 and that
+ * g_handle is assembled from a2 (lo) and a3 (hi) of FFA_SUCCESS_64.
+ */
+ZTEST(ffa_core, test_mem_share_single_region_v1_1)
+{
+	static const struct ffa_mem_region_addr_range range = {
+		.address = 0x1000U, .pg_cnt = 1U
+	};
+	struct ffa_mem_ops_args args = {
+		.dst_id = 0x8002U,
+		.flags = 0U,
+		.ranges = &range,
+		.range_cnt = 1U,
+	};
+	struct ffa_drv_state st = {
+		.version = FFA_VERSION_1_1,
+		.vm_id   = 0x8001U,
+		.tx_buf  = mem_tx_buf,
+		.rxtx_pages = 1U,  /* 4 KiB */
+	};
+	/* hdr_sz = 48 + 16 + 16 = 80; total_desc = 80 + 1*16 = 96 */
+	uint32_t hdr_sz = 80U;
+	uint32_t total  = 96U;
+
+	k_mutex_init(&st.lock);
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	mock_script[0].a0 = FFA_SUCCESS_64;
+	mock_script[0].a2 = 0xDEADBEEFU;
+	mock_script[0].a3 = 0xCAFEBABEU;
+	mock_script_len = 1;
+
+	zassert_equal(ffa_mem_share_impl(&st, &args), 0, NULL);
+
+	/* Verify SMC arguments. */
+	zassert_equal(mock_seen[0].a0, FFA_FN64_MEM_SHARE, NULL);
+	zassert_equal(mock_seen[0].a1, total, "total_desc_sz");
+	zassert_equal(mock_seen[0].a2, total, "first_frag_sz (all fit)");
+	zassert_equal(mock_seen[0].a3, 0U, "a3=0 for shared RXTX buffer");
+	zassert_equal(mock_seen[0].a4, 0U, "a4=0 for shared RXTX buffer");
+
+	/* Verify g_handle is assembled from a2 (lo) and a3 (hi). */
+	zassert_equal(args.g_handle,
+		      ((uint64_t)0xCAFEBABEU << 32) | 0xDEADBEEFU, NULL);
+
+	/* Spot-check descriptor: sender_id at byte 0, ep_count at byte 28. */
+	zassert_equal(rd16(mem_tx_buf, 0U), 0x8001U, "sender_id");
+	zassert_equal(rd32(mem_tx_buf, 28U), 1U, "ep_count");
+	/* For v1.1, ep_mem_offset must be set to 48. */
+	zassert_equal(rd32(mem_tx_buf, 32U), 48U, "ep_mem_offset");
+	/* EMAD at [48]: receiver. */
+	zassert_equal(rd16(mem_tx_buf, 48U), 0x8002U, "receiver");
+	/* composite_off at [52] = 48 + 16 = 64. */
+	zassert_equal(rd32(mem_tx_buf, 52U), 64U, "composite_off v1.1");
+	/* Composite header at [64]: total_pg_cnt=1, range_cnt=1. */
+	zassert_equal(rd32(mem_tx_buf, 64U), 1U, "total_pg_cnt");
+	zassert_equal(rd32(mem_tx_buf, 68U), 1U, "addr_range_cnt");
+	/* Constituent at [80]: address=0x1000, pg_cnt=1. */
+	zassert_equal(rd64(mem_tx_buf, (uint32_t)hdr_sz),
+		      0x1000U, "constituent address");
+	zassert_equal(rd32(mem_tx_buf, (uint32_t)hdr_sz + 8U),
+		      1U, "constituent pg_cnt");
+}
+
+/*
+ * v1.2 share: composite_off is 80 (48+32), constituent at byte 96.
+ */
+ZTEST(ffa_core, test_mem_share_single_region_v1_2)
+{
+	static const struct ffa_mem_region_addr_range range = {
+		.address = 0x5000U, .pg_cnt = 2U
+	};
+	struct ffa_mem_ops_args args = {
+		.dst_id = 0x8003U,
+		.flags = 0U,
+		.ranges = &range,
+		.range_cnt = 1U,
+	};
+	struct ffa_drv_state st = {
+		.version    = FFA_VERSION_1_2,
+		.vm_id      = 0x8001U,
+		.tx_buf     = mem_tx_buf,
+		.rxtx_pages = 1U,
+	};
+	/* hdr_sz = 48 + 32 + 16 = 96; total = 96 + 16 = 112 */
+
+	k_mutex_init(&st.lock);
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	mock_script[0].a0 = FFA_SUCCESS_64;
+	mock_script[0].a2 = 0x1234U;
+	mock_script[0].a3 = 0x5678U;
+	mock_script_len = 1;
+
+	zassert_equal(ffa_mem_share_impl(&st, &args), 0, NULL);
+
+	zassert_equal(mock_seen[0].a0, FFA_FN64_MEM_SHARE, NULL);
+	zassert_equal(mock_seen[0].a1, 112U, "total_desc_sz v1.2");
+	zassert_equal(mock_seen[0].a2, 112U, "first_frag_sz v1.2");
+
+	/* composite_off at EMAD+4 = 48+4 = 52; value = 48+32 = 80 */
+	zassert_equal(rd32(mem_tx_buf, 52U), 80U, "composite_off v1.2");
+	/* Composite header at [80]. */
+	zassert_equal(rd32(mem_tx_buf, 80U), 2U, "total_pg_cnt");
+	zassert_equal(rd32(mem_tx_buf, 84U), 1U, "addr_range_cnt");
+	/* Constituent at [96]. */
+	zassert_equal(rd64(mem_tx_buf, 96U), 0x5000U, "constituent address v1.2");
+	zassert_equal(rd32(mem_tx_buf, 104U), 2U, "constituent pg_cnt v1.2");
+
+	zassert_equal(args.g_handle,
+		      ((uint64_t)0x5678U << 32) | 0x1234U, NULL);
+}
+
+/*
+ * Fragmentation test: simulate the SPMC returning FFA_MEM_FRAG_RX after the
+ * initial FFA_FN64_MEM_SHARE (e.g. the SPMC needs additional FRAG_TX to
+ * complete the handle assignment). The driver must issue FFA_MEM_FRAG_TX
+ * carrying the partial handle from the FRAG_RX response, then loop until
+ * FFA_SUCCESS_64.
+ *
+ * With a 4 KiB TX buffer and 3 small constituents the descriptor (128 bytes)
+ * fits in one fragment. We force FRAG_RX via the mock to exercise the loop.
+ */
+ZTEST(ffa_core, test_mem_share_frag_tx)
+{
+	static const struct ffa_mem_region_addr_range ranges[3] = {
+		{ .address = 0x1000U, .pg_cnt = 1U },
+		{ .address = 0x2000U, .pg_cnt = 1U },
+		{ .address = 0x3000U, .pg_cnt = 1U },
+	};
+	struct ffa_mem_ops_args args = {
+		.dst_id    = 0x8002U,
+		.ranges    = ranges,
+		.range_cnt = 3U,
+	};
+	struct ffa_drv_state st = {
+		.version    = FFA_VERSION_1_1,
+		.vm_id      = 0x8001U,
+		.tx_buf     = mem_tx_buf,
+		.rxtx_pages = 1U,
+	};
+
+	k_mutex_init(&st.lock);
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	/* SPMC returns FRAG_RX after initial MEM_SHARE. */
+	mock_script[0].a0 = FFA_MEM_FRAG_RX;
+	mock_script[0].a1 = 0xAABBCCDDU;
+	mock_script[0].a2 = 0xEEFF0011U;
+	/* SPMC accepts FRAG_TX and returns SUCCESS_64. */
+	mock_script[1].a0 = FFA_SUCCESS_64;
+	mock_script[1].a2 = 0xFEEDU;
+	mock_script[1].a3 = 0xBEEFU;
+	mock_script_len = 2;
+
+	zassert_equal(ffa_mem_share_impl(&st, &args), 0, NULL);
+
+	/* First call: FFA_FN64_MEM_SHARE. */
+	zassert_equal(mock_seen[0].a0, FFA_FN64_MEM_SHARE, NULL);
+	/* Second call: FFA_MEM_FRAG_TX with partial handle from FRAG_RX. */
+	zassert_equal(mock_seen[1].a0, FFA_MEM_FRAG_TX, "second call is FRAG_TX");
+	zassert_equal(mock_seen[1].a1, 0xAABBCCDDU, "frag handle lo");
+	zassert_equal(mock_seen[1].a2, 0xEEFF0011U, "frag handle hi");
+	/* g_handle from SUCCESS_64. */
+	zassert_equal(args.g_handle,
+		      ((uint64_t)0xBEEFU << 32) | 0xFEEDU, NULL);
+}
+
+/* Share returns -EINVAL when SPMC responds with FFA_ERROR. */
+ZTEST(ffa_core, test_mem_share_error)
+{
+	static const struct ffa_mem_region_addr_range range = {
+		.address = 0x1000U, .pg_cnt = 1U
+	};
+	struct ffa_mem_ops_args args = {
+		.dst_id    = 0x8002U,
+		.ranges    = &range,
+		.range_cnt = 1U,
+	};
+	struct ffa_drv_state st = {
+		.version    = FFA_VERSION_1_1,
+		.vm_id      = 0x8001U,
+		.tx_buf     = mem_tx_buf,
+		.rxtx_pages = 1U,
+	};
+
+	k_mutex_init(&st.lock);
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	mock_script[0].a0 = FFA_ERROR;
+	mock_script[0].a2 = (unsigned long)FFA_RET_NO_MEMORY;
+	mock_script_len = 1;
+
+	zassert_equal(ffa_mem_share_impl(&st, &args), -ENOMEM, NULL);
+}
+
+/* Share returns -EINVAL on NULL ranges. */
+ZTEST(ffa_core, test_mem_share_null_ranges)
+{
+	struct ffa_mem_ops_args args = {
+		.dst_id    = 0x8002U,
+		.ranges    = NULL,
+		.range_cnt = 1U,
+	};
+	struct ffa_drv_state st = {
+		.version    = FFA_VERSION_1_1,
+		.vm_id      = 0x8001U,
+		.tx_buf     = mem_tx_buf,
+		.rxtx_pages = 1U,
+	};
+
+	k_mutex_init(&st.lock);
+	ffa_test_set_conduit(mock_conduit);
+
+	zassert_equal(ffa_mem_share_impl(&st, &args), -EINVAL, NULL);
+}
+
+/* Reclaim issues FFA_MEM_RECLAIM with correct a1/a2/a3 and returns 0. */
+ZTEST(ffa_core, test_mem_reclaim_success)
+{
+	struct ffa_drv_state st = {
+		.version    = FFA_VERSION_1_1,
+		.vm_id      = 0x8001U,
+		.tx_buf     = mem_tx_buf,
+		.rxtx_pages = 1U,
+	};
+	uint64_t handle = ((uint64_t)0x0000CAFEU << 32) | 0xBABE0000U;
+
+	k_mutex_init(&st.lock);
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	mock_script[0].a0 = FFA_SUCCESS_32;
+	mock_script_len = 1;
+
+	zassert_equal(ffa_mem_reclaim_impl(&st, handle, FFA_MEM_RECLAIM_CLEAR), 0, NULL);
+
+	zassert_equal(mock_seen[0].a0, FFA_MEM_RECLAIM, "function id");
+	zassert_equal((uint32_t)mock_seen[0].a1,
+		      (uint32_t)(handle & 0xFFFFFFFFU), "handle lo");
+	zassert_equal((uint32_t)mock_seen[0].a2,
+		      (uint32_t)(handle >> 32), "handle hi");
+	zassert_equal((uint32_t)mock_seen[0].a3,
+		      FFA_MEM_RECLAIM_CLEAR, "flags");
+}
+
+/* Reclaim propagates FFA_ERROR as -errno. */
+ZTEST(ffa_core, test_mem_reclaim_error)
+{
+	struct ffa_drv_state st = {
+		.version    = FFA_VERSION_1_1,
+		.vm_id      = 0x8001U,
+		.tx_buf     = mem_tx_buf,
+		.rxtx_pages = 1U,
+	};
+
+	k_mutex_init(&st.lock);
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	mock_script[0].a0 = FFA_ERROR;
+	mock_script[0].a2 = (unsigned long)FFA_RET_DENIED;
+	mock_script_len = 1;
+
+	zassert_equal(ffa_mem_reclaim_impl(&st, 0xDEADU, 0U), -EACCES, NULL);
+}
+
+/* Public wrappers return -EAGAIN when FF-A core is not available. */
+ZTEST(ffa_core, test_mem_public_unavailable)
+{
+	struct ffa_mem_region_addr_range range = { .address = 0U, .pg_cnt = 1U };
+	struct ffa_mem_ops_args args = {
+		.dst_id = 0x8002U, .ranges = &range, .range_cnt = 1U
+	};
+
+	if (!ffa_is_available()) {
+		zassert_equal(ffa_mem_share(&args), -EAGAIN, NULL);
+		zassert_equal(ffa_mem_reclaim(0U, 0U), -EAGAIN, NULL);
+	}
+}
+
+#endif /* CONFIG_ARM_FFA_MEM_SHARE */
+
 ZTEST_SUITE(ffa_core, NULL, NULL, NULL, NULL, NULL);
