@@ -27,6 +27,15 @@
 #define FFA_RXTX_UNMAP            0x84000067U
 #define FFA_PARTITION_INFO_GET    0x84000068U
 #define FFA_ID_GET                0x84000069U
+#define FFA_YIELD                 0x8400006CU
+#define FFA_RUN                   0x8400006DU
+#define FFA_MSG_SEND_DIRECT_REQ_32  0x8400006FU
+#define FFA_MSG_SEND_DIRECT_REQ_64  0xC400006FU
+#define FFA_MSG_SEND_DIRECT_RESP_32 0x84000070U
+#define FFA_MSG_SEND_DIRECT_RESP_64 0xC4000070U
+#define FFA_MSG_SEND_DIRECT_REQ2    0xC400008DU
+#define FFA_MSG_SEND_DIRECT_RESP2   0xC400008EU
+#define FFA_PARTITION_INFO_GET_REGS 0xC400008BU
 
 /* FF-A return/error codes (in w2 of FFA_ERROR, or negative w0). */
 #define FFA_RET_SUCCESS            0
@@ -55,6 +64,26 @@
 
 /* FFA_VERSION returns a negative 32-bit value (bit31 set) on NOT_SUPPORTED. */
 #define FFA_VERSION_NOT_SUPPORTED  0xFFFFFFFFU
+
+/* Endpoint pair packing for direct messages: sender[31:16], receiver[15:0]. */
+#define FFA_PACK_TARGET_INFO(src, dst) \
+	((((uint32_t)(src) & 0xFFFFU) << 16) | ((uint32_t)(dst) & 0xFFFFU))
+
+/* PARTITION_INFO_GET flags. */
+#define FFA_PARTITION_INFO_GET_COUNT_ONLY  0x1U
+
+/* FF-A 1.0 partition record is the first 8 bytes (no UUID). */
+#define FFA_1_0_PARTITION_INFO_SZ          8U
+
+/* PARTITION_INFO_GET_REGS: packed fields in a2. */
+#define FFA_PIG_REGS_LAST_IDX(x)   ((uint16_t)((x) & 0xFFFFU))
+#define FFA_PIG_REGS_CUR_IDX(x)    ((uint16_t)(((x) >> 16) & 0xFFFFU))
+#define FFA_PIG_REGS_TAG(x)        ((uint16_t)(((x) >> 32) & 0xFFFFU))
+#define FFA_PIG_REGS_SIZE(x)       ((uint16_t)(((x) >> 48) & 0xFFFFU))
+/* PARTITION_INFO_GET_REGS: packed partition record word0. */
+#define FFA_PIG_REC_ID(x)          ((uint16_t)((x) & 0xFFFFU))
+#define FFA_PIG_REC_EXEC_CTXT(x)   ((uint16_t)(((x) >> 16) & 0xFFFFU))
+#define FFA_PIG_REC_PROPS(x)       ((uint32_t)(((x) >> 32) & 0xFFFFFFFFU))
 
 /* FF-A 4 KiB page (spec constant, not the kernel translation granule). */
 #define FFA_PAGE_SIZE              0x1000U
