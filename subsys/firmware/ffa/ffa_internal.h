@@ -134,4 +134,9 @@ int ffa_send_direct_req2(struct ffa_drv_state *st, uint16_t dst,
 			 const struct ffa_uuid *uuid,
 			 struct ffa_send_direct_data2 *data);
 
+int ffa_rx_release(struct ffa_drv_state *st);
+int ffa_partition_info_get_rxbuf(struct ffa_drv_state *st,
+				 const struct ffa_uuid *uuid,
+				 struct ffa_partition_info *out, size_t *count);
+
 #endif /* ZEPHYR_SUBSYS_FIRMWARE_FFA_FFA_INTERNAL_H_ */
