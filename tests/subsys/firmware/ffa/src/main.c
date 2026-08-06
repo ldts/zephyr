@@ -897,7 +897,7 @@ ZTEST(ffa_core, test_notif_bitmap_create_ok)
 {
 	struct ffa_drv_state st = {
 		.vm_id   = 0x0001U,
-		.conduit = ARM_SMCCC_CONDUIT_SMC,
+		.conduit = SMCCC_CONDUIT_SMC,
 	};
 
 	k_mutex_init(&st.lock);
@@ -913,7 +913,7 @@ ZTEST(ffa_core, test_notif_bitmap_create_error)
 {
 	struct ffa_drv_state st = {
 		.vm_id   = 0x0001U,
-		.conduit = ARM_SMCCC_CONDUIT_SMC,
+		.conduit = SMCCC_CONDUIT_SMC,
 	};
 
 	k_mutex_init(&st.lock);
