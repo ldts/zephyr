@@ -109,6 +109,20 @@
 /* FFA_MEM_RECLAIM flags. */
 #define FFA_MEM_RECLAIM_CLEAR      (1U << 0)
 
+/* Notification function IDs. */
+#define FFA_NOTIFICATION_BITMAP_CREATE   0x8400007DU
+#define FFA_NOTIFICATION_BITMAP_DESTROY  0x8400007EU
+#define FFA_NOTIFICATION_BIND            0x8400007FU
+#define FFA_NOTIFICATION_UNBIND          0x84000080U
+#define FFA_NOTIFICATION_SET             0x84000081U
+#define FFA_NOTIFICATION_GET             0x84000082U
+#define FFA_NOTIFICATION_INFO_GET_32     0x84000083U
+#define FFA_FN64_NOTIFICATION_INFO_GET   0xC4000083U
+
+/* Pack receiver/vCPU endpoint info into a1 for BIND/UNBIND/GET. */
+#define FFA_NOTIF_PACK_RECV_VCPU(vcpu, recv_id) \
+	(((uint32_t)(vcpu) << 16) | (uint16_t)(recv_id))
+
 /* Memory access permissions in ffa_mem_region_attributes.attrs (Linux arm_ffa.h). */
 #define FFA_MEM_RW                 (1U << 1)  /* Read/write */
 #define FFA_MEM_RO                 (1U << 0)  /* Read-only */
@@ -222,6 +236,9 @@ struct ffa_drv_state {
 	uint32_t rxtx_pages;        /* pages per buffer (drives tx_sz when tx_sz==0) */
 	uint32_t tx_sz;             /* TX buffer size in bytes (0 = use rxtx_pages*PAGE_SIZE) */
 	struct k_mutex lock;        /* serializes RX buffer use */
+#ifdef CONFIG_ARM_FFA_NOTIF
+	bool notif_enabled;         /* NOTIFICATION_BITMAP_CREATE succeeded */
+#endif
 };
 
 /* Conduit seam: production uses arm_smccc_1_2_smc/hvc; tests install a mock. */
@@ -269,6 +286,12 @@ int ffa_mem_share_impl(struct ffa_drv_state *st,
 		       struct ffa_mem_ops_args *args);
 int ffa_mem_reclaim_impl(struct ffa_drv_state *st,
 			 uint64_t g_handle, uint32_t flags);
+#endif
+
+#ifdef CONFIG_ARM_FFA_NOTIF
+/* Called from ffa_init(); return value logged but non-fatal. */
+int ffa_notification_bitmap_create_impl(struct ffa_drv_state *st);
+void ffa_notification_bitmap_destroy_impl(struct ffa_drv_state *st);
 #endif
 
 #endif /* ZEPHYR_SUBSYS_FIRMWARE_FFA_FFA_INTERNAL_H_ */

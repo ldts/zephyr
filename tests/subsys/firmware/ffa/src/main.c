@@ -864,4 +864,153 @@ ZTEST(ffa_core, test_mem_public_unavailable)
 
 #endif /* CONFIG_ARM_FFA_MEM_SHARE */
 
+/* ================================================================
+ * SP-4: Notification tests
+ * ================================================================ */
+#ifdef CONFIG_ARM_FFA_NOTIF
+
+/* Helper: set ffa_state so public notification functions pass guard checks. */
+static void notif_setup_state(uint16_t vm_id)
+{
+	ffa_state.available     = true;
+	ffa_state.notif_enabled = true;
+	ffa_state.vm_id         = vm_id;
+	ffa_test_set_conduit(mock_conduit);
+}
+
+static bool g_cb_called;
+static int  g_cb_seen_id;
+
+static void notif_test_cb(int notify_id, void *cb_data)
+{
+	g_cb_called  = true;
+	g_cb_seen_id = notify_id;
+}
+
+static void notif_dummy_cb(int notify_id, void *cb_data)
+{
+	(void)notify_id;
+	(void)cb_data;
+}
+
+ZTEST(ffa_core, test_notif_bitmap_create_ok)
+{
+	struct ffa_drv_state st = {
+		.vm_id   = 0x0001U,
+		.conduit = ARM_SMCCC_CONDUIT_SMC,
+	};
+
+	k_mutex_init(&st.lock);
+	ffa_test_set_conduit(mock_conduit);
+	set_mock_res_a0(FFA_SUCCESS_32);
+
+	zassert_equal(ffa_notification_bitmap_create_impl(&st), 0, NULL);
+	zassert_equal(mock_last_args.a0, FFA_NOTIFICATION_BITMAP_CREATE, NULL);
+	zassert_equal(mock_last_args.a1, 0x0001U, "vm_id in a1");
+}
+
+ZTEST(ffa_core, test_notif_bitmap_create_error)
+{
+	struct ffa_drv_state st = {
+		.vm_id   = 0x0001U,
+		.conduit = ARM_SMCCC_CONDUIT_SMC,
+	};
+
+	k_mutex_init(&st.lock);
+	ffa_test_set_conduit(mock_conduit);
+	memset(&mock_next_res, 0, sizeof(mock_next_res));
+	mock_next_res.a0 = FFA_ERROR;
+	mock_next_res.a2 = (unsigned long)FFA_RET_NOT_SUPPORTED;
+
+	zassert_equal(ffa_notification_bitmap_create_impl(&st), -ENOTSUP, NULL);
+}
+
+ZTEST(ffa_core, test_notif_bind_args)
+{
+	/* Sender 0x8002, our vm_id 0x0001, bitmap = 0x5 */
+	notif_setup_state(0x0001U);
+	set_mock_res_a0(FFA_SUCCESS_32);
+
+	zassert_equal(ffa_notification_bind(0x8002U, 0x5ULL, 0), 0, NULL);
+	zassert_equal(mock_last_args.a0, FFA_NOTIFICATION_BIND, NULL);
+	/* a1 = (sender << 16) | recv_id */
+	zassert_equal(mock_last_args.a1, (0x8002U << 16) | 0x0001U, NULL);
+	zassert_equal(mock_last_args.a2, 0U, "flags");
+	zassert_equal(mock_last_args.a3, 0x5U, "bitmap_lo");
+	zassert_equal(mock_last_args.a4, 0U, "bitmap_hi");
+}
+
+ZTEST(ffa_core, test_notif_bind_error)
+{
+	notif_setup_state(0x0001U);
+	memset(&mock_next_res, 0, sizeof(mock_next_res));
+	mock_next_res.a0 = FFA_ERROR;
+	mock_next_res.a2 = (unsigned long)FFA_RET_DENIED;
+
+	zassert_equal(ffa_notification_bind(0x8002U, 0x1ULL, 0), -EACCES, NULL);
+}
+
+ZTEST(ffa_core, test_notif_get_bitmap)
+{
+	notif_setup_state(0x0001U);
+	/* SP bitmap = 5 (a2=5, a3=0), VM bitmap = 2 (a4=2, a5=0) */
+	memset(&mock_next_res, 0, sizeof(mock_next_res));
+	mock_next_res.a0 = FFA_SUCCESS_32;
+	mock_next_res.a2 = 5UL;
+	mock_next_res.a4 = 2UL;
+
+	uint64_t bm = 0;
+
+	zassert_equal(ffa_notification_get(0, FFA_NOTIF_GET_ALL, &bm), 0, NULL);
+	zassert_equal(bm, 7ULL, "SP(5) | VM(2) = 7");
+	zassert_equal(mock_last_args.a0, FFA_NOTIFICATION_GET, NULL);
+	zassert_equal(mock_last_args.a1, 0x0001U, "vcpu=0, vm_id=1");
+	zassert_equal(mock_last_args.a2, FFA_NOTIF_GET_ALL, "flags");
+}
+
+ZTEST(ffa_core, test_notif_request_and_dispatch)
+{
+	g_cb_called  = false;
+	g_cb_seen_id = -1;
+
+	ffa_notification_unregister(3);
+	zassert_equal(ffa_notification_request(3, notif_test_cb, NULL), 0, NULL);
+
+	/* Mock GET: bit 3 set in SP bitmap */
+	notif_setup_state(0x0001U);
+	memset(&mock_next_res, 0, sizeof(mock_next_res));
+	mock_next_res.a0 = FFA_SUCCESS_32;
+	mock_next_res.a2 = BIT(3);
+
+	zassert_equal(ffa_notification_dispatch(), 0, NULL);
+	zassert_true(g_cb_called, "callback must fire for bit 3");
+	zassert_equal(g_cb_seen_id, 3, NULL);
+
+	ffa_notification_unregister(3);
+}
+
+ZTEST(ffa_core, test_notif_request_busy)
+{
+	ffa_notification_unregister(7);
+
+	zassert_equal(ffa_notification_request(7, notif_dummy_cb, NULL), 0, NULL);
+	zassert_equal(ffa_notification_request(7, notif_dummy_cb, NULL), -EBUSY, NULL);
+	ffa_notification_unregister(7);
+}
+
+ZTEST(ffa_core, test_notif_unavailable)
+{
+	ffa_state.available     = true;
+	ffa_state.notif_enabled = false;
+
+	zassert_equal(ffa_notification_bind(0x8002U, 1ULL, 0), -ENOTSUP, NULL);
+	zassert_equal(ffa_notification_set(0x8002U, 1ULL, 0), -ENOTSUP, NULL);
+
+	uint64_t bm = 0;
+
+	zassert_equal(ffa_notification_get(0, FFA_NOTIF_GET_ALL, &bm), -ENOTSUP, NULL);
+}
+
+#endif /* CONFIG_ARM_FFA_NOTIF */
+
 ZTEST_SUITE(ffa_core, NULL, NULL, NULL, NULL, NULL);

@@ -154,6 +154,111 @@ int ffa_mem_reclaim(uint64_t g_handle, uint32_t flags);
 
 #endif /* CONFIG_ARM_FFA_MEM_SHARE */
 
+#ifdef CONFIG_ARM_FFA_NOTIF
+
+/**
+ * @defgroup ffa_notif FF-A Notifications
+ * @ingroup ffa
+ * @{
+ */
+
+typedef void (*ffa_notifier_cb)(int notify_id, void *cb_data);
+/** FFA_NOTIFICATION_GET flag: include SPM framework bitmap. */
+#define FFA_NOTIF_GET_SPM  BIT(0)
+/** FFA_NOTIFICATION_GET flag: include SP (secure partition) bitmap. */
+#define FFA_NOTIF_GET_SP   BIT(1)
+/** FFA_NOTIFICATION_GET flag: include VM (non-secure) bitmap. */
+#define FFA_NOTIF_GET_VM   BIT(2)
+/** Convenience flag to query all notification bitmaps. */
+#define FFA_NOTIF_GET_ALL  (FFA_NOTIF_GET_SPM | FFA_NOTIF_GET_SP | FFA_NOTIF_GET_VM)
+
+/** FFA_NOTIFICATION_BIND flag: request per-vCPU delivery. */
+#define FFA_NOTIF_BIND_FLAG_PER_VCPU  BIT(0)
+
+/**
+ * @brief Bind a set of notifications from @p sender to this endpoint.
+ *
+ * Calls FFA_NOTIFICATION_BIND. The bits set in @p bitmap indicate
+ * notification IDs to bind.
+ *
+ * @param sender   FF-A endpoint ID of the sending partition.
+ * @param bitmap   64-bit mask of notification IDs to bind.
+ * @param flags    0 or FFA_NOTIF_BIND_FLAG_PER_VCPU.
+ * @retval 0 on success, negative errno otherwise.
+ */
+int ffa_notification_bind(uint16_t sender, uint64_t bitmap, uint32_t flags);
+
+/**
+ * @brief Unbind previously bound notifications from @p sender.
+ *
+ * @param sender   FF-A endpoint ID of the sending partition.
+ * @param bitmap   64-bit mask of notification IDs to unbind.
+ * @retval 0 on success, negative errno otherwise.
+ */
+int ffa_notification_unbind(uint16_t sender, uint64_t bitmap);
+
+/**
+ * @brief Send a set of notifications to @p receiver.
+ *
+ * Calls FFA_NOTIFICATION_SET.
+ *
+ * @param receiver  FF-A endpoint ID of the receiving partition.
+ * @param bitmap    64-bit mask of notification IDs to set.
+ * @param flags     0 or FFA_NOTIF_BIND_FLAG_PER_VCPU.
+ * @retval 0 on success, negative errno otherwise.
+ */
+int ffa_notification_set(uint16_t receiver, uint64_t bitmap, uint32_t flags);
+
+/**
+ * @brief Query pending notifications for this endpoint.
+ *
+ * Calls FFA_NOTIFICATION_GET. The returned @p bitmap is the union of the
+ * SP and VM pending bitmaps.
+ *
+ * @param vcpu    vCPU index (0 for global / single-core).
+ * @param flags   Combination of FFA_NOTIF_GET_SP / FFA_NOTIF_GET_VM /
+ *                FFA_NOTIF_GET_SPM selecting which bitmap classes to return.
+ * @param bitmap  Output: combined pending notification bitmap.
+ * @retval 0 on success, negative errno otherwise.
+ */
+int ffa_notification_get(uint16_t vcpu, uint32_t flags, uint64_t *bitmap);
+
+/**
+ * @brief Register a callback for a specific notification ID.
+ *
+ * When ffa_notification_dispatch() fires, the callback is invoked for each
+ * pending bit. Only one callback per ID; returns -EBUSY if already set.
+ *
+ * @param notify_id  Notification bit index (0–63).
+ * @param cb         Callback to invoke on delivery.
+ * @param data       Opaque pointer passed back to @p cb.
+ * @retval 0 on success, -EINVAL if out of range, -EBUSY if already registered.
+ */
+int ffa_notification_request(int notify_id, ffa_notifier_cb cb, void *data);
+
+/**
+ * @brief Unregister a previously registered notification callback.
+ *
+ * @param notify_id  Notification bit index (0–63).
+ * @retval 0 on success, -EINVAL if out of range.
+ */
+int ffa_notification_unregister(int notify_id);
+
+/**
+ * @brief Poll pending notifications and dispatch registered callbacks.
+ *
+ * Calls FFA_NOTIFICATION_GET with FFA_NOTIF_GET_ALL and invokes any
+ * registered callback for each set bit. Suitable as a schedule-receiver
+ * poll handler when no DT interrupt is available.
+ *
+ * @retval 0 on success, negative errno if FFA_NOTIFICATION_GET fails.
+ */
+int ffa_notification_dispatch(void);
+
+/** @} */
+
+#endif /* CONFIG_ARM_FFA_NOTIF */
+
 /** @} */
 
 #ifdef __cplusplus

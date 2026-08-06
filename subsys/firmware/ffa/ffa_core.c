@@ -237,6 +237,18 @@ static int ffa_init(void)
 	st->available = true;
 	LOG_INF("FF-A core ready (v1.%u, id 0x%04x)",
 		FFA_VERSION_MINOR(st->version), st->vm_id);
+
+#ifdef CONFIG_ARM_FFA_NOTIF
+	ret = ffa_notification_bitmap_create_impl(st);
+	if (ret) {
+		LOG_WRN("FF-A notifications unavailable (err %d)", ret);
+		st->notif_enabled = false;
+	} else {
+		st->notif_enabled = true;
+		LOG_INF("FF-A notifications enabled");
+	}
+#endif
+
 	return 0;
 }
 

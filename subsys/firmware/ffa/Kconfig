@@ -21,6 +21,15 @@ config ARM_FFA_MEM_SHARE
 	  via FFA_MEM_SHARE and FFA_MEM_RECLAIM.  Required by the OP-TEE
 	  FF-A transport to pass shared-memory handles to OP-TEE.
 
+config ARM_FFA_NOTIF
+	bool "FF-A notifications (NOTIFICATION_BIND / SET / GET)"
+	depends on ARM_FFA
+	help
+	  Enable support for FF-A endpoint notifications: bitmap allocation,
+	  bind/unbind, set, get, and poll-based dispatch to registered
+	  per-notification-ID callbacks.  Used by the OP-TEE FF-A transport
+	  for asynchronous call completion.
+
 config ARM_FFA_RXTX_PAGES
 	int "FF-A RX/TX buffer size (in 4 KiB pages)"
 	default 1
