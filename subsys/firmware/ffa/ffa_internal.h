@@ -95,8 +95,92 @@
 #define FFA_FEAT_RXTX_MIN_SZ_64K   1
 #define FFA_FEAT_RXTX_MIN_SZ_16K   2
 
+/* Memory-sharing function IDs (64-bit, native/FN64 variants). */
+#define FFA_MEM_SHARE_32           0x84000073U
+#define FFA_FN64_MEM_SHARE         0xC4000073U
+#define FFA_MEM_RETRIEVE_REQ_32    0x84000074U
+#define FFA_FN64_MEM_RETRIEVE_REQ  0xC4000074U
+#define FFA_MEM_RETRIEVE_RESP      0x84000075U
+#define FFA_MEM_RELINQUISH         0x84000076U
+#define FFA_MEM_RECLAIM            0x84000077U
+#define FFA_MEM_FRAG_RX            0x8400007AU
+#define FFA_MEM_FRAG_TX            0x8400007BU
+
+/* FFA_MEM_RECLAIM flags. */
+#define FFA_MEM_RECLAIM_CLEAR      (1U << 0)
+
+/*
+ * Memory access permissions — data/instruction access, shareability.
+ * Packed into ffa_mem_region_attributes.perms (bits[7:0]).
+ */
+#define FFA_MEM_DATA_PERM_NP       0x0U  /* No permission */
+#define FFA_MEM_DATA_PERM_RO       0x1U  /* Read-only */
+#define FFA_MEM_DATA_PERM_RW       0x2U  /* Read/write */
+#define FFA_MEM_INSTR_PERM_NX      0x0U  /* No execute */
+#define FFA_MEM_INSTR_PERM_X       (1U << 2)
+#define FFA_MEM_DATA_PERM_SHIFT    0
+#define FFA_MEM_INSTR_PERM_SHIFT   2
+
+/* Shareability attribute (bits[9:8] of ffa_mem_region_attributes.flags). */
+#define FFA_MEM_SHARE_NON_SHAREABLE  0x0U
+#define FFA_MEM_SHARE_RESERVED       0x1U
+#define FFA_MEM_SHARE_OUTER          0x2U
+#define FFA_MEM_SHARE_INNER          0x3U
+#define FFA_MEM_SHARE_SHIFT          8
+
+/* Cacheability attribute (bits[5:4] of ffa_mem_region_attributes.flags). */
+#define FFA_MEM_CACHE_RESERVED       0x0U
+#define FFA_MEM_CACHE_NON_CACHEABLE  0x1U
+#define FFA_MEM_CACHE_WRITE_BACK     0x3U
+#define FFA_MEM_CACHE_SHIFT          4
+
+/* Memory type (bits[3:2]). */
+#define FFA_MEM_TYPE_NON_SECURE_DEVICE  0x0U
+#define FFA_MEM_TYPE_NORMAL             0x2U  /* Normal memory */
+#define FFA_MEM_TYPE_SHIFT              2
+
+/*
+ * Composite memory-region descriptor layout (FF-A spec §10.9), only needed
+ * when CONFIG_ARM_FFA_MEM_SHARE is enabled.
+ *
+ * struct ffa_mem_region_addr_range is the public constituent type defined in
+ * include/zephyr/firmware/ffa.h (always available).  The three structs below
+ * are internal to ffa_mem.c and are therefore gated here.
+ */
+#ifdef CONFIG_ARM_FFA_MEM_SHARE
+
+/** Composite memory region descriptor (variable-length, placed in TX buf). */
+struct ffa_composite_mem_region {
+	uint32_t total_pg_cnt;   /**< total pages across all constituents */
+	uint32_t addr_range_cnt;
+	uint64_t reserved;
+	struct ffa_mem_region_addr_range constituents[];
+} __packed;
+
+/** Per-borrower memory-access permissions and attributes. */
+struct ffa_mem_region_attributes {
+	uint16_t receiver;       /**< borrower endpoint ID */
+	uint8_t  perms;          /**< data/instr access permissions */
+	uint8_t  flags;          /**< cacheability / shareability / type */
+	uint32_t composite_off;  /**< byte offset to ffa_composite_mem_region */
+	uint64_t reserved;
+} __packed;
+
+/** FF-A memory region descriptor header. */
+struct ffa_mem_region {
+	uint16_t sender;              /**< sender endpoint ID */
+	uint8_t  mem_access_perm;     /**< data/instr perms from sender view */
+	uint8_t  flags;               /**< type/cacheability/shareability */
+	uint32_t handle_lo;           /**< global handle lo (0 on share) */
+	uint32_t handle_hi;           /**< global handle hi (0 on share) */
+	uint64_t tag;                 /**< optional opaque tag */
+	uint32_t mem_access_attr_cnt;
+	struct ffa_mem_region_attributes receivers[];
+} __packed;
+
+#endif /* CONFIG_ARM_FFA_MEM_SHARE */
+
 /* Internal singleton driver state. */
-struct ffa_drv_state {
 	bool available;             /* FF-A init succeeded */
 	uint32_t version;           /* negotiated framework version */
 	uint16_t vm_id;             /* our endpoint ID (FFA_ID_GET) */
@@ -146,5 +230,12 @@ int ffa_partition_info_get_regs(struct ffa_drv_state *st,
 /* Singleton driver state — non-static so ffa_msg.c can reference it directly.
  * Buffers remain static in ffa_core.c. */
 extern struct ffa_drv_state ffa_state;
+
+#ifdef CONFIG_ARM_FFA_MEM_SHARE
+int ffa_mem_share_impl(struct ffa_drv_state *st,
+		       struct ffa_mem_ops_args *args);
+int ffa_mem_reclaim_impl(struct ffa_drv_state *st,
+			 uint64_t g_handle, uint32_t flags);
+#endif
 
 #endif /* ZEPHYR_SUBSYS_FIRMWARE_FFA_FFA_INTERNAL_H_ */

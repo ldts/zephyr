@@ -13,6 +13,14 @@ config ARM_FFA
 
 if ARM_FFA
 
+config ARM_FFA_MEM_SHARE
+	bool "FF-A memory sharing (MEM_SHARE / MEM_RECLAIM)"
+	depends on ARM_FFA
+	help
+	  Enable support for sharing memory regions with a secure partition
+	  via FFA_MEM_SHARE and FFA_MEM_RECLAIM.  Required by the OP-TEE
+	  FF-A transport to pass shared-memory handles to OP-TEE.
+
 config ARM_FFA_RXTX_PAGES
 	int "FF-A RX/TX buffer size (in 4 KiB pages)"
 	default 1

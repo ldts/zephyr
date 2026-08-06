@@ -103,6 +103,57 @@ int ffa_msg_send_direct_req(uint16_t dst, struct ffa_send_direct_data *data);
 int ffa_msg_send_direct_req2(uint16_t dst, const struct ffa_uuid *uuid,
 			     struct ffa_send_direct_data2 *data);
 
+/**
+ * One physical address range passed to ffa_mem_share().
+ * Always defined so that callers can reference it unconditionally.
+ */
+struct ffa_mem_region_addr_range {
+	uint64_t address;  /**< IPA/PA base address */
+	uint32_t pg_cnt;   /**< number of 4 KiB pages */
+	uint32_t reserved;
+};
+
+#ifdef CONFIG_ARM_FFA_MEM_SHARE
+
+/**
+ * Arguments for ffa_mem_share().  On success g_handle is filled by the SPMC.
+ */
+struct ffa_mem_ops_args {
+	uint64_t g_handle;  /**< OUT: global memory handle */
+	uint16_t dst_id;    /**< borrower endpoint ID */
+	uint32_t flags;     /**< FFA_MEM_RECLAIM_CLEAR or 0 */
+	/** caller-supplied physical ranges to share */
+	const struct ffa_mem_region_addr_range *ranges;
+	uint32_t range_cnt;
+};
+
+/** Flag: zero memory on reclaim. */
+#define FFA_MEM_RECLAIM_CLEAR  (1U << 0)
+
+/**
+ * @brief Share a memory region with a secure partition via FFA_MEM_SHARE.
+ *
+ * Builds the FF-A composite memory-region descriptor in the TX buffer and
+ * calls FFA_FN64_MEM_SHARE, driving the FFA_MEM_FRAG_TX loop if the
+ * descriptor exceeds the TX buffer size.
+ *
+ * @param args  caller-supplied parameters; @p args->g_handle is filled on
+ *              success.
+ * @retval 0 on success, negative errno otherwise, -EAGAIN if FF-A unavailable.
+ */
+int ffa_mem_share(struct ffa_mem_ops_args *args);
+
+/**
+ * @brief Reclaim a previously shared memory region.
+ *
+ * @param g_handle  global handle returned by ffa_mem_share().
+ * @param flags     FFA_MEM_RECLAIM_CLEAR or 0.
+ * @retval 0 on success, negative errno otherwise, -EAGAIN if FF-A unavailable.
+ */
+int ffa_mem_reclaim(uint64_t g_handle, uint32_t flags);
+
+#endif /* CONFIG_ARM_FFA_MEM_SHARE */
+
 /** @} */
 
 #ifdef __cplusplus
