@@ -34,16 +34,63 @@ The core setup phase (this subsystem) covers:
    arrays in ``.bss``. This is sufficient for QEMU environments; platforms with
    cache-coherency requirements may need additional configuration.
 
+Partition Discovery
+*******************
+
+The :c:func:`ffa_partition_info_get` function discovers Secure Partitions
+registered with the SPMC.
+
+* Pass a nil UUID (all-zero bytes) to enumerate every partition visible to
+  this endpoint; pass a specific UUID to filter by service identity.
+* Pass ``out = NULL`` to perform a count-only query: the SPMC returns the
+  number of matching partitions without transferring any descriptors, and the
+  caller receives that count in ``*count``.
+* When ``out`` is non-NULL, pass the capacity of the caller-supplied
+  :c:struct:`ffa_partition_info` array in ``*count``; on return ``*count``
+  holds the number of entries written.
+
+Each :c:struct:`ffa_partition_info` descriptor carries the partition ID,
+its execution-context count, a property bitmask (:c:macro:`FFA_PARTITION_DIRECT_RECV`
+and related ``FFA_PARTITION_*`` macros), and the partition UUID.
+
+**Implementation note — RX-buffer vs register variant:**
+When the negotiated FF-A version is 1.2 or later and
+``FFA_PARTITION_INFO_GET_REGS`` is available, the register-based variant is
+used: partition descriptors are returned in registers (a3 and above) with no
+shared-memory transfer and no RX-buffer lock required.  On earlier firmware
+(FF-A 1.1 or 1.0) the RX-buffer variant is used instead: the SPMC writes
+descriptors into the shared RX buffer, the driver copies them under the
+RX-buffer mutex, and then releases the buffer with ``FFA_RX_RELEASE``.  The
+caller sees the same :c:struct:`ffa_partition_info` layout regardless of
+which path was taken.
+
+Direct Messaging
+****************
+
+Two direct-request primitives are provided.
+
+:c:func:`ffa_msg_send_direct_req` sends an ``FFA_MSG_SEND_DIRECT_REQ``
+call to a destination endpoint and blocks until the corresponding
+``FFA_MSG_SEND_DIRECT_RESP`` is received.  The payload consists of five
+``unsigned long`` words (registers x3–x7) carried in
+:c:struct:`ffa_send_direct_data`.  On return the same structure holds the
+response values from the SP.  Intermediate ``FFA_INTERRUPT`` and
+``FFA_YIELD`` indications are handled transparently by re-invoking
+``FFA_RUN`` until a final response or error is received.
+
+:c:func:`ffa_msg_send_direct_req2` is the FF-A 1.2 extended variant
+(``FFA_MSG_SEND_DIRECT_REQ2``).  It adds a target-service UUID and extends
+the payload to fourteen ``unsigned long`` words (registers x4–x17) in
+:c:struct:`ffa_send_direct_data2`.  The function returns ``-ENOTSUP`` when
+the negotiated FF-A version is below 1.2.
+
 Scope
 *****
 
 This subsystem provides the foundation for the following planned extensions:
 
-* **SP-2b** — partition-info discovery and direct messaging.
 * **SP-3** — memory-sharing operations.
 * **SP-4** — notification support.
-
-None of SP-2b, SP-3, or SP-4 are included in this phase.
 
 Configuration
 *************

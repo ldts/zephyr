@@ -241,6 +241,15 @@ New APIs and options
   * :c:func:`ffa_version`
   * :c:func:`ffa_id_get`
   * :c:struct:`ffa_uuid`
+  * :c:func:`ffa_partition_info_get` — discover Secure Partitions by UUID
+    (nil UUID = enumerate all; supports count-only mode; version-gated
+    register variant used on FF-A >= 1.2, RX-buffer variant on older firmware)
+  * :c:func:`ffa_msg_send_direct_req` — direct request/response (x3-x7 payload)
+  * :c:func:`ffa_msg_send_direct_req2` — FF-A 1.2 direct request2 with target
+    UUID and extended payload (x4-x17); returns ``-ENOTSUP`` below FF-A 1.2
+  * :c:struct:`ffa_partition_info`
+  * :c:struct:`ffa_send_direct_data`
+  * :c:struct:`ffa_send_direct_data2`
 
 * Haptics
 
@@ -428,7 +437,10 @@ Libraries / Subsystems
   * Added the Arm Firmware Framework for A-profile (FF-A) core subsystem
     (:kconfig:option:`CONFIG_ARM_FFA`), providing version negotiation, endpoint
     ID discovery, feature probing and RX/TX buffer mapping for a Zephyr
-    Normal-World endpoint. Built on the new SMCCC v1.2 call layer.
+    Normal-World endpoint.  Extended with partition discovery
+    (:c:func:`ffa_partition_info_get`) and direct messaging
+    (:c:func:`ffa_msg_send_direct_req`, :c:func:`ffa_msg_send_direct_req2`).
+    Built on the new SMCCC v1.2 call layer.
 
 * LoRa / LoRaWAN
 
