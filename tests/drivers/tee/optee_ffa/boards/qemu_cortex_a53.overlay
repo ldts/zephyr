@@ -1,0 +1,8 @@
+/ {
+	firmware {
+		optee_ffa: optee-ffa {
+			compatible = "linaro,optee-ffa";
+			method = "smc";
+		};
+	};
+};

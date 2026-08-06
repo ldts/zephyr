@@ -19,3 +19,24 @@ config OPTEE_MAX_NOTIF
 	help
 	 Sets the maximum notifications from OP-TEE to the Normal World. OP-TEE using
 	 this mechanism for the synchronization.
+
+config OPTEE_FFA
+	bool "OP-TEE Trusted OS via FF-A transport"
+	depends on ARM_FFA && ARM_FFA_MEM_SHARE
+	select TEE
+	help
+	  Enables the OP-TEE driver using the Arm FF-A conduit instead of
+	  direct SMC calls.  Discovers the OP-TEE Secure Partition via
+	  FFA_PARTITION_INFO_GET, negotiates the OP-TEE protocol with
+	  OPTEE_FFA_GET_API_VERSION / EXCHANGE_CAPABILITIES, and issues
+	  yielding calls via FFA_MSG_SEND_DIRECT_REQ.  Shared memory is
+	  registered with FFA_MEM_SHARE and reclaimed after use.
+
+  Requires CONFIG_ARM_FFA=y and CONFIG_ARM_FFA_MEM_SHARE=y.
+
+config OPTEE_FFA_MAX_NOTIF
+	int "Max OP-TEE FF-A notification IDs"
+	depends on OPTEE_FFA
+	default $(UINT8_MAX)
+	help
+	  Maximum OP-TEE notification key value for the FF-A transport.

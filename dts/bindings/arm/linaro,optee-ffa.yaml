@@ -1,0 +1,19 @@
+# Copyright 2026 Qualcomm Innovation Center, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: OP-TEE Trusted OS accessed via Arm FF-A transport
+
+compatible: "linaro,optee-ffa"
+
+include: base.yaml
+
+properties:
+  method:
+    type: string
+    required: true
+    description: |
+      FF-A conduit: "smc" for SMC-based FF-A (most common), "hvc" for
+      hypervisor-call-based FF-A.
+    enum:
+      - smc
+      - hvc

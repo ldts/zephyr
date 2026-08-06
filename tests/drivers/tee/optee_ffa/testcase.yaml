@@ -1,0 +1,6 @@
+tests:
+  drivers.tee.optee_ffa:
+    integration_platforms:
+      - qemu_cortex_a53
+    platform_allow: qemu_cortex_a53
+    tags: drivers tee ffa optee
