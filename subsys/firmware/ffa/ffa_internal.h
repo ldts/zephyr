@@ -109,45 +109,94 @@
 /* FFA_MEM_RECLAIM flags. */
 #define FFA_MEM_RECLAIM_CLEAR      (1U << 0)
 
+/* Memory access permissions in ffa_mem_region_attributes.attrs (Linux arm_ffa.h). */
+#define FFA_MEM_RW                 (1U << 1)  /* Read/write */
+#define FFA_MEM_RO                 (1U << 0)  /* Read-only */
+#define FFA_MEM_NO_EXEC            (1U << 2)  /* No execute */
+#define FFA_MEM_EXEC               (1U << 3)  /* Execute */
+
 /*
- * Memory access permissions — data/instruction access, shareability.
- * Packed into ffa_mem_region_attributes.perms (bits[7:0]).
+ * Memory region attributes packed into ffa_mem_region.attributes (lower byte).
+ * From Linux arm_ffa.h: type[5]=normal/device, cache[3:2], share[1:0].
  */
-#define FFA_MEM_DATA_PERM_NP       0x0U  /* No permission */
-#define FFA_MEM_DATA_PERM_RO       0x1U  /* Read-only */
-#define FFA_MEM_DATA_PERM_RW       0x2U  /* Read/write */
-#define FFA_MEM_INSTR_PERM_NX      0x0U  /* No execute */
-#define FFA_MEM_INSTR_PERM_X       (1U << 2)
-#define FFA_MEM_DATA_PERM_SHIFT    0
-#define FFA_MEM_INSTR_PERM_SHIFT   2
+#define FFA_MEM_NORMAL             (1U << 5)  /* Normal memory */
+#define FFA_MEM_DEVICE             (1U << 4)  /* Device memory */
+#define FFA_MEM_WRITE_BACK         (3U << 2)  /* Write-back cacheable */
+#define FFA_MEM_NON_CACHEABLE      (1U << 2)  /* Non-cacheable */
+#define FFA_MEM_NON_SHAREABLE      0U
+#define FFA_MEM_OUTER_SHAREABLE    2U
+#define FFA_MEM_INNER_SHAREABLE    3U
 
-/* Shareability attribute (bits[9:8] of ffa_mem_region_attributes.flags). */
-#define FFA_MEM_SHARE_NON_SHAREABLE  0x0U
-#define FFA_MEM_SHARE_RESERVED       0x1U
-#define FFA_MEM_SHARE_OUTER          0x2U
-#define FFA_MEM_SHARE_INNER          0x3U
-#define FFA_MEM_SHARE_SHIFT          8
+/* Combined: Normal, Write-Back, Inner-shareable (pre-built for RW NS→SP share) */
+#define FFA_MEM_ATTRS_NWB_IS       (FFA_MEM_NORMAL | FFA_MEM_WRITE_BACK | FFA_MEM_INNER_SHAREABLE)
 
-/* Cacheability attribute (bits[5:4] of ffa_mem_region_attributes.flags). */
-#define FFA_MEM_CACHE_RESERVED       0x0U
-#define FFA_MEM_CACHE_NON_CACHEABLE  0x1U
-#define FFA_MEM_CACHE_WRITE_BACK     0x3U
-#define FFA_MEM_CACHE_SHIFT          4
-
-/* Memory type (bits[3:2]). */
-#define FFA_MEM_TYPE_NON_SECURE_DEVICE  0x0U
-#define FFA_MEM_TYPE_NORMAL             0x2U  /* Normal memory */
-#define FFA_MEM_TYPE_SHIFT              2
+/* FFA_MEM_RECLAIM_CLEAR flag (also defined in public header). */
+#define FFA_MEM_CLEAR_AFTER_RECLAIM  (1U << 0)
 
 /*
- * Composite memory-region descriptor layout (FF-A spec §10.9), only needed
- * when CONFIG_ARM_FFA_MEM_SHARE is enabled.
+ * Composite memory-region descriptor layout (FF-A spec §10.9, from Linux
+ * include/linux/arm_ffa.h), only needed when CONFIG_ARM_FFA_MEM_SHARE is set.
  *
- * struct ffa_mem_region_addr_range is the public constituent type defined in
- * include/zephyr/firmware/ffa.h (always available).  The three structs below
- * are internal to ffa_mem.c and are therefore gated here.
+ * struct ffa_mem_region (48 bytes):
+ *   sender_id, attributes (type/cache/share), flags, handle, tag,
+ *   ep_mem_size, ep_count, ep_mem_offset, reserved[3]
+ *
+ * struct ffa_mem_region_attributes (16 bytes pre-v1.2, 32 bytes v1.2):
+ *   receiver, attrs (perms), flag, composite_off, [impdef_val[16],] reserved
+ *
+ * struct ffa_composite_mem_region (16-byte header + constituents[]):
+ *   total_pg_cnt, addr_range_cnt, reserved, constituents[]
+ *
+ * struct ffa_mem_region_addr_range (16 bytes, public in ffa.h):
+ *   address, pg_cnt, reserved
+ *
+ * composite_off in each ffa_mem_region_attributes is a byte offset from the
+ * start of the enclosing ffa_mem_region.  For one receiver:
+ *   pre-v1.2: composite_off = 48 + 16 = 64
+ *   v1.2:     composite_off = 48 + 32 = 80
  */
 #ifdef CONFIG_ARM_FFA_MEM_SHARE
+
+/** FF-A memory region descriptor header (48 bytes). */
+struct ffa_mem_region {
+	uint16_t sender_id;
+	uint16_t attributes;      /**< memory type/cacheability/shareability */
+	uint32_t flags;           /**< transfer operation flags */
+	uint64_t handle;          /**< 0 on share, filled by SPMC */
+	uint64_t tag;             /**< implementation-defined tag */
+	uint32_t ep_mem_size;     /**< EMAD size, 0 pre-v1.1 */
+	uint32_t ep_count;        /**< number of ffa_mem_region_attributes entries */
+	uint32_t ep_mem_offset;   /**< byte offset to EMAD array, 0 pre-v1.1 */
+	uint32_t reserved[3];
+} __packed;
+
+BUILD_ASSERT(sizeof(struct ffa_mem_region) == 48U,
+	     "ffa_mem_region must be 48 bytes");
+
+/** Per-borrower memory access and permissions descriptor.
+ *  16 bytes for FF-A < 1.2; 32 bytes (with impdef_val) for FF-A >= 1.2.
+ */
+struct ffa_mem_region_attributes {
+	uint16_t receiver;      /**< borrower endpoint ID */
+	uint8_t  attrs;         /**< access permissions (FFA_MEM_RW etc.) */
+	uint8_t  flag;          /**< retrieve flags (0 for share) */
+	uint32_t composite_off; /**< byte offset to ffa_composite_mem_region */
+	uint8_t  impdef_val[16];/**< implementation defined (v1.2 only) */
+	uint64_t reserved;
+} __packed;
+
+BUILD_ASSERT(sizeof(struct ffa_mem_region_attributes) == 32U,
+	     "ffa_mem_region_attributes must be 32 bytes");
+
+/* Effective EMAD size: 16 bytes pre-v1.2, 32 bytes for v1.2+. */
+#define FFA_EMAD_SIZE_V1_0  16U
+#define FFA_EMAD_SIZE_V1_2  32U
+
+static inline uint32_t ffa_emad_size(uint32_t version)
+{
+	return (version >= FFA_VERSION_1_2) ? FFA_EMAD_SIZE_V1_2
+					    : FFA_EMAD_SIZE_V1_0;
+}
 
 /** Composite memory region descriptor (variable-length, placed in TX buf). */
 struct ffa_composite_mem_region {
@@ -157,26 +206,8 @@ struct ffa_composite_mem_region {
 	struct ffa_mem_region_addr_range constituents[];
 } __packed;
 
-/** Per-borrower memory-access permissions and attributes. */
-struct ffa_mem_region_attributes {
-	uint16_t receiver;       /**< borrower endpoint ID */
-	uint8_t  perms;          /**< data/instr access permissions */
-	uint8_t  flags;          /**< cacheability / shareability / type */
-	uint32_t composite_off;  /**< byte offset to ffa_composite_mem_region */
-	uint64_t reserved;
-} __packed;
-
-/** FF-A memory region descriptor header. */
-struct ffa_mem_region {
-	uint16_t sender;              /**< sender endpoint ID */
-	uint8_t  mem_access_perm;     /**< data/instr perms from sender view */
-	uint8_t  flags;               /**< type/cacheability/shareability */
-	uint32_t handle_lo;           /**< global handle lo (0 on share) */
-	uint32_t handle_hi;           /**< global handle hi (0 on share) */
-	uint64_t tag;                 /**< optional opaque tag */
-	uint32_t mem_access_attr_cnt;
-	struct ffa_mem_region_attributes receivers[];
-} __packed;
+BUILD_ASSERT(sizeof(struct ffa_composite_mem_region) == 16U,
+	     "ffa_composite_mem_region header must be 16 bytes");
 
 #endif /* CONFIG_ARM_FFA_MEM_SHARE */
 
