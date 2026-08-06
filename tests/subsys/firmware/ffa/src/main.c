@@ -464,6 +464,29 @@ ZTEST(ffa_core, test_partition_info_regs_decode)
 	zassert_equal(out[0].uuid.bytes[15], 15, NULL);
 }
 
+ZTEST(ffa_core, test_partition_info_regs_rejects_bad_window)
+{
+	struct ffa_drv_state st = { .version = FFA_VERSION_1_2 };
+	struct ffa_uuid uuid = {0};
+	struct ffa_partition_info out[8];
+	size_t count = 8;
+
+	mock_script_reset();
+	ffa_test_set_conduit(mock_script_conduit);
+	/* a2: last_idx=10 (count>1), cur_idx=5 => window (5-0+1)=6 > 5 records.
+	 * Must be rejected before the record-decode loop reads past a17.
+	 */
+	struct arm_smccc_1_2_regs r = {
+		.a0 = FFA_SUCCESS_64,
+		.a2 = (uint64_t)10 | ((uint64_t)5 << 16),
+	};
+	mock_script[0] = r;
+	mock_script_len = 1;
+
+	zassert_equal(ffa_partition_info_get_regs(&st, &uuid, out, &count),
+		      -EINVAL, NULL);
+}
+
 ZTEST(ffa_core, test_public_msg_unavailable)
 {
 	struct ffa_send_direct_data d = {0};

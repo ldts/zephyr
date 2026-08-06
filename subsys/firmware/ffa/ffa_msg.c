@@ -253,6 +253,14 @@ int ffa_partition_info_get_regs(struct ffa_drv_state *st,
 		cur_idx = FFA_PIG_REGS_CUR_IDX((uint64_t)ret.a2);
 		tag = FFA_PIG_REGS_TAG((uint64_t)ret.a2);
 
+		/* SPMC packs at most 5 records per invoke (a3..a17 = 15 longs).
+		 * Reject a nonsensical window to prevent reading past a17 and to
+		 * guarantee forward progress.
+		 */
+		if (cur_idx < start_idx || (uint16_t)(cur_idx - start_idx) >= 5U) {
+			return -EINVAL;
+		}
+
 		/* Unpack partition records from a3 onward; 3 u64 per record. */
 		regs = &ret.a3;
 		for (uint16_t i = start_idx; i <= cur_idx && out_idx < *count; i++) {
